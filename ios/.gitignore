@@ -1,0 +1,7 @@
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+PushSigning.xcconfig
+App/NabaoPush.entitlements

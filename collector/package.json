@@ -1,0 +1,23 @@
+{
+  "name": "@nabao/collector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22 <27" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "doctor": "npm run build && node dist/src/cli.js doctor",
+    "scan": "npm run build && node dist/src/cli.js scan",
+    "submit": "npm run build && node dist/src/cli.js submit",
+    "browsers:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "linkedom": "0.18.13",
+    "playwright": "1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "5.9.3"
+  }
+}

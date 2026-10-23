@@ -1,0 +1,43 @@
+name: Publish images
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image identifiers
+        id: images
+        shell: bash
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build, test and verify the exact images to publish
+        run: bash scripts/container-smoke.sh
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified images
+        env:
+          IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
+        run: |
+          docker tag nabao-backend:smoke "$IMAGE_PREFIX/backend:$IMAGE_TAG"
+          docker tag nabao-collector:smoke "$IMAGE_PREFIX/collector:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/backend:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/collector:$IMAGE_TAG"

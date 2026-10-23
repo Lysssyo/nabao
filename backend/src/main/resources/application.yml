@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: nabao-backend
+  profiles:
+    default: local
+  sql:
+    init:
+      mode: always
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      fail-on-numbers-for-enums: true
+      accept-float-as-int: false
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+nabao:
+  internal-key: ${INTERNAL_API_KEY:}
+  table-file: ${NABAO_TABLE_FILE:../.local/public/latest.json}
+  push-data-source: ${NABAO_PUSH_DATA_SOURCE:table}
+  push-state-file: ${NABAO_PUSH_STATE_FILE:.local/push/table-state.json}
+  apns:
+    enabled: ${APNS_ENABLED:false}
+    team-id: ${APNS_TEAM_ID:}
+    key-id: ${APNS_KEY_ID:}
+    bundle-id: ${APNS_BUNDLE_ID:}
+    private-key-path: ${APNS_PRIVATE_KEY_PATH:}
+    environment: ${APNS_ENVIRONMENT:}
+    poll-delay-ms: ${APNS_POLL_DELAY_MS:60000}
+    test-endpoint: ${APNS_TEST_ENDPOINT:}

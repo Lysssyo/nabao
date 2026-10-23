@@ -1,0 +1,84 @@
+name: nabao
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: nabao
+      MYSQL_USER: nabao
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysqladmin ping -h 127.0.0.1 -u root --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  backend:
+    image: ${NABAO_BACKEND_IMAGE:-nabao-backend:local}
+    build:
+      context: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_URL: jdbc:mysql://mysql:3306/nabao?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      DB_USERNAME: nabao
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
+      APNS_ENABLED: ${APNS_ENABLED:-false}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-}
+      APNS_ENVIRONMENT: ${APNS_ENVIRONMENT:-}
+      APNS_PRIVATE_KEY_PATH: ${APNS_PRIVATE_KEY_PATH:-}
+      APNS_POLL_DELAY_MS: ${APNS_POLL_DELAY_MS:-60000}
+      NABAO_TABLE_FILE: /app/public/latest.json
+      NABAO_PUSH_DATA_SOURCE: table
+      NABAO_PUSH_STATE_FILE: /app/push/table-state.json
+    volumes:
+      - public-data:/app/public:ro
+      - push-data:/app/push
+    ports:
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  collector:
+    image: ${NABAO_COLLECTOR_IMAGE:-nabao-collector:local}
+    build:
+      context: ./collector
+    profiles: ["tools"]
+    environment:
+      NABAO_DATA_DIR: /app/data
+      NABAO_BACKEND_URL: http://backend:8080
+      NABAO_INTERNAL_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
+      NABAO_LLM_BASE_URL: ${NABAO_LLM_BASE_URL:-https://api.deepseek.com}
+      NABAO_LLM_MODEL: ${NABAO_LLM_MODEL:-deepseek-flash}
+      NABAO_LLM_API_KEY: ${NABAO_LLM_API_KEY:-}
+      NABAO_LLM_MAX_TOKENS: ${NABAO_LLM_MAX_TOKENS:-32768}
+      NABAO_LLM_TIMEOUT_MS: ${NABAO_LLM_TIMEOUT_MS:-180000}
+      NABAO_LLM_THINKING_DISABLED: ${NABAO_LLM_THINKING_DISABLED:-true}
+      # Optional private storage-state file provisioned into collector-data.
+      NABAO_BROWSER_STORAGE_STATE: ${NABAO_BROWSER_STORAGE_STATE:-}
+      NABAO_TABLE_DIRECTORY: /app/public
+    volumes:
+      - collector-data:/app/data
+      - public-data:/app/public
+    init: true
+    shm_size: 1gb
+    depends_on:
+      backend:
+        condition: service_started
+    # One bounded scan by default. Override with watch after validating this host's access.
+    command: ["table"]
+
+volumes:
+  mysql-data:
+  collector-data:
+  public-data:
+  push-data:

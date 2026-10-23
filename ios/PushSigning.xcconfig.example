@@ -1,0 +1,5 @@
+// Copy outside versioned signing settings and select explicitly after Apple provisioning.
+// Development-signed builds use development; distribution/TestFlight use production.
+NABAO_APNS_ENVIRONMENT = development
+CODE_SIGN_ENTITLEMENTS = App/NabaoPush.entitlements
+// Set the real PRODUCT_BUNDLE_IDENTIFIER and DEVELOPMENT_TEAM in your local build configuration.

@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: mvn -B -ntp verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/nabao-backend-0.1.0-SNAPSHOT.jar
+
+  collector:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # CI never contacts the authors or requires a model API key.
+
+  ios:
+    needs: backend
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target
+      - name: Test iOS core rules
+        run: swift test --package-path ios/NabaoCore
+      - name: Verify Swift client, backend and local APNs workflow
+        run: python3 scripts/push-smoke.py --table-source
+      - name: Build for iOS Simulator
+        run: >-
+          xcodebuild -project ios/Nabao.xcodeproj -scheme Nabao
+          -configuration Debug -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Preserve local push validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: push-validation
+          if-no-files-found: ignore
+          include-hidden-files: true
+          path: |
+            .local/push-validation/*/results.json
+            .local/push-validation/*/server.log
+            .local/push-validation/*/notification.apns
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build images and verify MySQL publication workflow
+        run: bash scripts/container-smoke.sh
+      - name: Preserve validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-validation
+          if-no-files-found: ignore
+          include-hidden-files: true
+          path: |
+            .local/container-validation/build.log
+            .local/container-validation/services.log
+            .local/container-validation/http-results.json
+            .local/container-validation/collector-doctor.json
+            .local/container-validation/chromium-runtime.log
