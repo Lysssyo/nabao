@@ -25,7 +25,21 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Test and build Vue management app
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+          npm run build
+          git diff --exit-code -- ../backend/src/main/resources/static/admin
       - run: mvn -B -ntp verify
+      - name: Test local development launcher configuration
+        run: python3 -m unittest discover -s ../scripts/tests
       - uses: actions/upload-artifact@v4
         with:
           name: backend-jar
@@ -62,6 +76,10 @@ jobs:
           path: backend/target
       - name: Test iOS core rules
         run: swift test --package-path ios/NabaoCore
+      - name: Verify push settings editing and save lifecycle
+        run: sh ios/verify-push-settings.sh
+      - name: Verify atomic plan backup and restore
+        run: sh ios/verify-plan-backup.sh
       - name: Verify Swift client, backend and local APNs workflow
         run: python3 scripts/push-smoke.py --table-source
       - name: Build for iOS Simulator

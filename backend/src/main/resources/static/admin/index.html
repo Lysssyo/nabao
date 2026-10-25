@@ -1,45 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="same-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'self'">
-  <title>纳宝 · 采集管理</title>
-  <link rel="stylesheet" href="/admin/admin.css">
-  <script src="/admin/admin.js" defer></script>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' blob:; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <meta name="theme-color" content="#145c4b">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/brand/nabao-icon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/admin/brand/nabao-icon-180.png">
+  <title>纳宝 · 额度投票结果</title>
+  <script type="module" crossorigin src="/admin/assets/index-DG8IuNFN.js"></script>
+  <link rel="stylesheet" crossorigin href="/admin/assets/index-dRHqFIr1.css">
 </head>
-<body>
-  <main>
-    <header>
-      <div class="wordmark" aria-label="纳宝">nabao<span>纳宝</span></div>
-      <span class="header-note">采集管理</span>
-    </header>
-    <section class="intro" aria-labelledby="page-title">
-      <div><p class="eyebrow">PUBLIC QUOTA OBSERVATORY</p><h1 id="page-title">每一次更新，<br>都有迹可循。</h1></div>
-      <p class="intro-note">查看采集任务、公开额度和来源状态。<br>这里展示运行结果，采集与发布由后台自动执行。</p>
-    </section>
-    <section class="connection" aria-labelledby="connection-title">
-      <form id="connect-form">
-        <label id="connection-title" for="internal-key">管理密钥</label>
-        <input id="internal-key" type="password" autocomplete="off" placeholder="输入当前环境的管理密钥" required maxlength="1000">
-        <button type="submit">连接</button>
-        <button id="disconnect" type="button" class="quiet" hidden>断开</button>
-      </form>
-      <p>密钥仅保留在当前页面内存中，关闭页面即清除。</p>
-    </section>
-    <div class="toolbar">
-      <nav aria-label="管理视图">
-        <button type="button" data-view="runs" aria-pressed="true">采集任务</button>
-        <button type="button" data-view="quotas" aria-pressed="false">公开额度</button>
-        <button type="button" data-view="sources" aria-pressed="false">数据来源</button>
-      </nav>
-      <button id="refresh" type="button" class="quiet">刷新</button>
-    </div>
-    <p id="message" role="status" aria-live="polite">连接后可查看最近 50 次采集任务。</p>
-    <section id="content" aria-label="数据列表"><div class="empty">等待连接</div></section>
-    <section id="detail" aria-label="任务详情" hidden></section>
-    <footer>公开参考信息 · 具体交易额度以渠道页面为准</footer>
-  </main>
-</body>
+<body><div id="app"></div></body>
 </html>

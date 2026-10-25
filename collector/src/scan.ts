@@ -1,17 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { parseHTML } from "linkedom";
 import { readNotePage, readProfilePage } from "./dom.js";
 import { mergeNotePage, readStructuredNote } from "./structured-note.js";
 import { captureIssues, compareCaptureRecency, contentHash, discoveryResult, imageCandidates, normalizedTimestamp } from "./rules.js";
-import { sources } from "./sources.js";
+import { loadAuthorConfig, requireVotingAuthors, withAuthorLease, type AuthorLease } from "./author-store.js";
 import { processCapture, type ProcessingResult } from "./pipeline.js";
 import { PROMPT_VERSION } from "./extract.js";
 import { openDedicatedSession, sessionDirectory } from "./browser-session.js";
 import { postInternal } from "./submit.js";
 import { loadState, writeJson } from "./storage.js";
+import { acquireProcessLock } from "./process-lock.js";
 import type { ImageEvidence, NoteCapture, RawNotePage, RunStatus } from "./types.js";
 
 export interface ScanOptions {
@@ -21,6 +22,7 @@ export interface ScanOptions {
   dataDirectory: string;
   knownNotesOnly?: boolean;
   captureOnly?: boolean;
+  authorLease?: AuthorLease;
 }
 interface SourceResult {
   authorId: string;
@@ -138,17 +140,17 @@ async function closeNormalLoginPrompt(page: Page): Promise<void> {
 }
 
 export async function scan(options: ScanOptions): Promise<{ status: RunStatus; reportFile: string; sourceCount: number }> {
+  return withAuthorLease(options.dataDirectory, lease => scanWithAuthors(options, lease), options.authorLease);
+}
+async function scanWithAuthors(options: ScanOptions, lease: AuthorLease): Promise<{ status: RunStatus; reportFile: string; sourceCount: number }> {
+  requireVotingAuthors(lease.config);
+  const sources = lease.config.authors;
   const selected = options.sourceId ? sources.filter((source) => source.id === options.sourceId) : sources;
   if (selected.length === 0) throw new Error("Unknown source ID.");
   if (!Number.isInteger(options.maxNotes) || options.maxNotes < 1 || options.maxNotes > 20) throw new Error("maxNotes must be 1–20.");
   const data = resolve(options.dataDirectory);
   await mkdir(data, { recursive: true, mode: 0o700 });
-  const lock = join(data, "scan.lock");
-  try { await mkdir(lock); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("Another scan is running or a stale data/scan.lock needs inspection.");
-    throw error;
-  }
+  const lock = await acquireProcessLock(join(data, "scan.lock"), "SCAN_BUSY");
   let browser: Browser | undefined;
   let browserContext: BrowserContext | undefined;
   const startedAt = new Date().toISOString();
@@ -299,7 +301,7 @@ export async function scan(options: ScanOptions): Promise<{ status: RunStatus; r
           ? resolve(data, previous.evidenceDirectory) : directory;
         const processing: ProcessingResult | undefined = options.captureOnly ? undefined : alreadyPublished
           ? { status: "published", stage: "submission", observationCount: 0, issues: [] }
-          : await processCapture(capture, processingDirectory, data);
+          : await processCapture(capture, processingDirectory, data, sources);
         if (processing) result.processing.push(processing);
         if (revision) {
           state.notes[capture.noteId] = {
@@ -349,7 +351,7 @@ export async function scan(options: ScanOptions): Promise<{ status: RunStatus; r
     return { status, reportFile, sourceCount: results.length };
   } finally {
     try { await browserContext?.close(); await browser?.close(); }
-    finally { await rm(lock, { recursive: true, force: true }); }
+    finally { await lock.release(); }
   }
 }
 
@@ -368,7 +370,7 @@ export async function doctor(): Promise<Record<string, unknown>> {
     internalKeyConfigured: Boolean(process.env.NABAO_INTERNAL_KEY?.trim()),
     backendUrl: process.env.NABAO_BACKEND_URL ?? "http://localhost:8080",
     dataDirectory: resolve(process.env.NABAO_DATA_DIR ?? "data"),
-    sources: sources.map(({ id, name }) => ({ id, name })),
+    sources: (await loadAuthorConfig(resolve(process.env.NABAO_DATA_DIR ?? "data"))).authors.map(({ id, name, profileUrl }) => ({ id, name, profileUrl })),
     automaticDiscovery: "NOT_CHECKED_BY_DOCTOR",
     message: "doctor 只检查本地配置，不访问小红书、模型服务或提交候选值。",
   };

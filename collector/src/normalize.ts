@@ -2,12 +2,12 @@ import type { CandidateRow, ExtractionIssue } from "./extract.js";
 import { resolveFund, type Fund } from "./catalog.js";
 import { normalizedTimestamp } from "./rules.js";
 import { validateObservations } from "./submit.js";
-import type { NoteCapture, Observation } from "./types.js";
+import type { NoteCapture, Observation, SourceAuthor } from "./types.js";
 import { createHash } from "node:crypto";
 import { sources } from "./sources.js";
 
-function evidenceLink(capture: NoteCapture): string {
-  const known = sources.find((source) => source.id === capture.authorId)?.seedNotes
+function evidenceLink(capture: NoteCapture, authors: readonly SourceAuthor[]): string {
+  const known = authors.find((source) => source.id === capture.authorId)?.seedNotes
     ?.find((note) => note.noteId === capture.noteId)?.url;
   if (known) return known;
   if (capture.openUrl) {
@@ -40,7 +40,7 @@ function rawCurrencies(raw: string | null): ("CNY" | "USD")[] {
   return result;
 }
 
-export function normalizeRows(rows: CandidateRow[], capture: NoteCapture, funds: Fund[]): {
+export function normalizeRows(rows: CandidateRow[], capture: NoteCapture, funds: Fund[], authors: readonly SourceAuthor[] = sources): {
   items: Observation[]; issues: ExtractionIssue[];
 } {
   const issues: ExtractionIssue[] = [];
@@ -77,10 +77,10 @@ export function normalizeRows(rows: CandidateRow[], capture: NoteCapture, funds:
       businessType: row.businessType, period: row.period, limitKind: row.limitKind,
       amountMinor: amount, currency, observedForDate: row.observedForDate,
       sourcePublishedAt: capture.sourcePublishedAt!, sourceUpdatedAt: capture.sourceUpdatedAt,
-      capturedAt: capture.capturedAt, evidenceRef: evidenceLink(capture),
+      capturedAt: capture.capturedAt, evidenceRef: evidenceLink(capture, authors),
       ...(sourceGroupId ? { sourceGroupId } : {}),
     };
-    try { validateObservations({ items: [item] }); }
+    try { validateObservations({ items: [item] }, authors); }
     catch { issue("OBSERVATION_INVALID", "候选行未通过日期、范围或来源校验。"); continue; }
     const key = [item.fundCode, item.channelScope, item.businessType, item.period, item.currency, item.observedForDate].join("|");
     const value = `${item.limitKind}|${item.amountMinor}`;

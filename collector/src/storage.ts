@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -10,10 +10,16 @@ export interface CollectorState {
 }
 
 export async function writeJson(path: string, value: unknown): Promise<void> {
+  const encoded = JSON.stringify(value, null, 2);
+  if (encoded === undefined) throw new TypeError("A JSON value is required.");
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await rename(temporary, path);
+  try {
+    const handle = await open(temporary, "wx", 0o600);
+    try { await handle.writeFile(`${encoded}\n`, "utf8"); await handle.sync(); }
+    finally { await handle.close(); }
+    await rename(temporary, path);
+  } finally { await rm(temporary, { force: true }); }
 }
 
 export async function loadState(dataDirectory: string): Promise<CollectorState> {

@@ -1,4 +1,4 @@
-/** Reviewed against the 2026-10-21 source images. Aliases require the same author and explicit six-digit code.
+/** Reviewed against the source images identified below. Aliases require the same author and explicit six-digit code.
  * Nasdaq Radar puts A/C in page headings. Codes still determine the share; aliases never infer a missing code.
  * NaS&P's erroneous 019525/I and 160213/ETF-connection names are deliberately not aliases. */
 export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string; names: Record<string, string[]> }>> = {
@@ -68,28 +68,29 @@ export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string
     }
   },
   "6715dd2d000000001d02255b": {
+    // Also reviewed the explicitly coded A/C labels in 2026-10-23 note 6adaf38c000000002a03a99d.
     "noteId": "6ad8512d000000002c03533c",
     "names": {
       "016532": [
-        "嘉实·纳斯达克100"
+        "嘉实·纳斯达克100", "嘉实纳斯达克100ETF联接A"
       ],
       "018043": [
         "天弘·纳斯达克100指数"
       ],
       "019172": [
-        "摩根·纳斯达克100指数"
+        "摩根·纳斯达克100指数", "摩根纳斯达克100指数A"
       ],
       "161130": [
-        "易方达·纳斯达克100"
+        "易方达·纳斯达克100", "易方达纳斯达克100ETF联接A"
       ],
       "016055": [
-        "博时·纳斯达克100"
+        "博时·纳斯达克100", "博时纳斯达克100ETF联接A"
       ],
       "016452": [
         "南方·纳斯达克100指数"
       ],
       "018966": [
-        "汇添富·纳斯达克100"
+        "汇添富·纳斯达克100", "汇添富纳斯达克100ETF联接A"
       ],
       "019441": [
         "万家·纳斯达克100指数"
@@ -101,7 +102,7 @@ export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string
         "招商·纳斯达克100"
       ],
       "019736": [
-        "宝盈·纳斯达克100指数"
+        "宝盈·纳斯达克100指数", "宝盈纳斯达克100指数A"
       ],
       "015299": [
         "华夏·纳斯达克100"
@@ -113,10 +114,10 @@ export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string
         "大成·纳斯达克100"
       ],
       "270042": [
-        "广发·纳斯达克100"
+        "广发·纳斯达克100", "广发纳斯达克100ETF联接A"
       ],
       "539001": [
-        "建信·纳斯达克100指数"
+        "建信·纳斯达克100指数", "建信纳斯达克100指数A"
       ],
       "016453": [
         "南方·纳斯达克100指数"
@@ -125,31 +126,31 @@ export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string
         "天弘·纳斯达克100指数"
       ],
       "016533": [
-        "嘉实·纳斯达克100"
+        "嘉实·纳斯达克100", "嘉实纳斯达克100ETF联接C"
       ],
       "019442": [
         "万家·纳斯达克100指数"
       ],
       "012870": [
-        "易方达·纳斯达克100"
+        "易方达·纳斯达克100", "易方达纳斯达克100ETF联接C"
       ],
       "019173": [
-        "摩根·纳斯达克100指数"
+        "摩根·纳斯达克100指数", "摩根纳斯达克100指数C"
       ],
       "019525": [
         "华泰柏瑞·纳斯达克100"
       ],
       "019737": [
-        "宝盈·纳斯达克100指数"
+        "宝盈·纳斯达克100指数", "宝盈纳斯达克100指数C"
       ],
       "016057": [
-        "博时·纳斯达克100"
+        "博时·纳斯达克100", "博时纳斯达克100ETF联接C"
       ],
       "014978": [
         "华安·纳斯达克100"
       ],
       "018967": [
-        "汇添富·纳斯达克100"
+        "汇添富·纳斯达克100", "汇添富纳斯达克100ETF联接C"
       ],
       "019548": [
         "招商·纳斯达克100"
@@ -158,14 +159,53 @@ export const DAILY_FUND_SOURCE_ALIASES: Readonly<Record<string, { noteId: string
         "华夏·纳斯达克100"
       ],
       "006479": [
-        "广发·纳斯达克100"
+        "广发·纳斯达克100", "广发纳斯达克100ETF联接C"
       ],
       "008971": [
         "大成·纳斯达克100"
       ],
       "012752": [
-        "建信·纳斯达克100指数"
+        "建信·纳斯达克100指数", "建信纳斯达克100指数C"
       ]
+    }
+  },
+  // Reviewed against the 2026-10-23 three-page table, which prints a code beside every name.
+  // 老纳's similar table omits codes, so its model-supplied codes do not authorize these aliases.
+  "64ea885c0000000001004087": {
+    "noteId": "6ada2168000000002403641d",
+    "names": {
+      "000834": ["大成纳斯达克100(QDII)A"],
+      "008971": ["大成纳斯达克100(QDII)C"],
+      "019524": ["华泰柏瑞纳斯达克100(QDII)A"],
+      "019525": ["华泰柏瑞纳斯达克100(QDII)C"],
+      "022664": ["华泰柏瑞纳斯达克100(QDII)I"],
+      "019736": ["宝盈纳斯达克100指数(QDII)A"],
+      "019737": ["宝盈纳斯达克100指数(QDII)C"],
+      "539001": ["建信纳斯达克100指数(QDII)A"],
+      "012752": ["建信纳斯达克100指数(QDII)C"],
+      "023422": ["建信纳斯达克100指数(QDII)D"],
+      "019172": ["摩根纳斯达克100指数(QDII)A"],
+      "019173": ["摩根纳斯达克100指数(QDII)C"],
+      "015299": ["华夏纳斯达克100(QDII)A"],
+      "015300": ["华夏纳斯达克100(QDII)C"],
+      "040046": ["华安纳斯达克100(QDII)A"],
+      "014978": ["华安纳斯达克100(QDII)C"],
+      "016055": ["博时纳斯达克100(QDII)A"],
+      "016057": ["博时纳斯达克100(QDII)C"],
+      "024237": ["博时纳斯达克100(QDII)I"],
+      "016532": ["嘉实纳斯达克100(QDII)A"],
+      "016533": ["嘉实纳斯达克100(QDII)C"],
+      "021838": ["嘉实纳斯达克100(QDII)I"],
+      "270042": ["广发纳斯达克100(QDII)A"],
+      "006479": ["广发纳斯达克100(QDII)C"],
+      "021778": ["广发纳指100(QDII)F"],
+      "019547": ["招商纳斯达克100(QDII)A"],
+      "019548": ["招商纳斯达克100(QDII)C"],
+      "161130": ["易方达纳斯达克100QDII-LOFA"],
+      "012870": ["易方达纳斯达克100QDII-LOFC"],
+      "018966": ["汇添富纳斯达克100(QDII)A"],
+      "018967": ["汇添富纳斯达克100(QDII)C"],
+      "021773": ["汇添富纳斯达克100(QDII)E"]
     }
   }
 };

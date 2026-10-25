@@ -7,7 +7,7 @@ RUN npx playwright install --with-deps chromium
 COPY tsconfig.json ./
 COPY src ./src
 COPY tests ./tests
-RUN npm test && mkdir -p /app/data /app/public && chown -R node:node /app/data /app/public
+RUN npm test && mkdir -p /app/data /app/public /app/status && chown -R node:node /app/data /app/public /app/status
 USER node
 ENV NABAO_DATA_DIR=/app/data
 ENTRYPOINT ["node", "dist/src/cli.js"]

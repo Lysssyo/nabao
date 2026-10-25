@@ -12,6 +12,8 @@ export interface SourceTable {
   authorId: string; capture: NoteCapture; table: DailyTable;
   withdrawnFields?: Record<string, VotedField[]>;
   validationVersion?: string;
+  /** Source verification outcome, retained when unchanged evidence skips extraction. */
+  validationStatus?: "COMPLETE" | "INCOMPLETE";
   unitContexts?: UnitContexts;
 }
 export interface SourceWatermark {
@@ -20,6 +22,18 @@ export interface SourceWatermark {
 }
 export interface VotePublication {
   format: 1; dataDate: string; revision: string; watermarks: SourceWatermark[];
+  authorConfig?: { revision: number; authorIds: string[] };
+}
+
+/** Configuration metadata is private publication state, never part of the public quota table. */
+export function validPublicationAuthorConfig(publication: VotePublication): boolean {
+  const config = publication.authorConfig;
+  if (config === undefined) return true;
+  return config !== null && Number.isSafeInteger(config.revision) && config.revision >= 1
+    && Array.isArray(config.authorIds) && config.authorIds.length >= 1 && config.authorIds.length <= 50
+    && config.authorIds.every(id => typeof id === "string" && /^[a-f0-9]{24}$/.test(id))
+    && new Set(config.authorIds).size === config.authorIds.length
+    && publication.watermarks.every(mark => config.authorIds.includes(mark.authorId));
 }
 interface FieldVote {
   authorId: string; noteId: string; value: string; key: string; notes: string[];
@@ -199,10 +213,17 @@ export function voteDailyTables(inputs: SourceTable[], dataDate: string, allowed
   return { table, decisions, publication, adoptedFields, pendingFields: decisions.length - adoptedFields };
 }
 
-/** A run may add observations, but may not remove or regress source evidence already used today. */
+/** Only a newer author configuration may withdraw a removed author's evidence. */
 export function olderPublication(next: VotePublication, current: VotePublication): boolean {
+  if (!validPublicationAuthorConfig(next) || !validPublicationAuthorConfig(current)) return true;
+  const nextConfig = next.authorConfig, currentConfig = current.authorConfig;
+  if (currentConfig && (!nextConfig || nextConfig.revision < currentConfig.revision)) return true;
+  if (currentConfig && nextConfig?.revision === currentConfig.revision
+    && [...nextConfig.authorIds].sort().join(",") !== [...currentConfig.authorIds].sort().join(",")) return true;
   if (next.dataDate !== current.dataDate) return next.dataDate < current.dataDate;
   for (const old of current.watermarks) {
+    if (nextConfig && nextConfig.revision > (currentConfig?.revision ?? 0)
+      && !nextConfig.authorIds.includes(old.authorId)) continue;
     const same = next.watermarks.find((item) => item.authorId === old.authorId && item.noteId === old.noteId);
     const time = (item: SourceWatermark) => Math.max(Date.parse(item.sourcePublishedAt), item.sourceUpdatedAt ? Date.parse(item.sourceUpdatedAt) : 0);
     if (same) {

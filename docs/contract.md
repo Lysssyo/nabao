@@ -1,11 +1,11 @@
 # 第一版边界与接口约定
 
-项目名 nabao。代码分为 `ios/`、`backend/` 和 `collector/`。
+项目名 nabao。代码分为 `ios/`、`backend/`、`collector/` 和 `frontend/`。
 
 ## 已确认的边界
 
 - 不做用户账号和计划云同步。个人定投、截图和个性化影响判断保存在 iOS 本地。
-- 额度主流程为每日文件表；五位作者按基金、当天数据与字段分别投票。匿名设备通知只订阅公开额度变化，不上传个人计划或金额。
+- 额度主流程为每日文件表；已配置作者按基金、当天数据与字段分别投票。匿名设备通知只订阅公开额度变化，不上传个人计划或金额。
 - 后端自动发现指定作者的新笔记及修改，正常路径不依赖每日人工录入。专用登录会话下已验证单轮自动采集；长期稳定性与服务器环境另行验证。
 - 模型 API 尚未配置时，状态必须明确为未配置；不生成伪造结果或声称没有变化。
 - Apple 开发者账号后补；已实现匿名注册、APNs 签名、发送及持久重试。本地假 APNs 与模拟器验证不等于 Apple 接受或真机送达。
@@ -32,7 +32,54 @@
 
 示例仅说明字段，不是可发布数据。发布器校验41份额；百分比未知为null，额度未知为待更新，业务脚注保留原意。notes最多30条、每条2000 UTF-16字符。采集过程、AI输出、票数不进入该接口。推送仅监测已确认直代销额度/状态变化；日期、费率、收益变化不提醒；未知或带附加条件的值不清除旧确认基线。文件缺失/损坏跳过判断。匿名设备登记仍沿用独立存储，额度文件流程不写观察数据库。
 
-以下观察接口为既有兼容接口。
+### 每日表状态与管理
+
+- `GET /api/v1/readiness`：表文件可读且校验通过返回200，体为 `{status:"READY",table:{status:"AVAILABLE",dataDate,updatedAt}}`；缺失或无效返回503，`status:"NOT_READY"`、表状态 `MISSING` / `INVALID`。此接口检查可读性，不宣称数据今天已更新或采集常驻正常。
+- `GET /internal/v1/table-status`：使用 `X-Internal-Key`，未配置503、错误/缺失401。返回实际公开表及独立安全摘要，均为 `Cache-Control: no-store`。Vue管理端使用此接口展示当前额度投票结果；不提供历史任务、旧额度或旧来源页面。
+- 原 `/api/v1/health` 保留服务/数据库/推送配置状态契约。表缺失不阻断设备注册或凭证正确的退订，也不会把推送配置状态改写为表状态。
+
+管理响应字段：`tableState`（AVAILABLE/MISSING/INVALID）、`table`（实际每日表或null）、`summaryState`（AVAILABLE/MISSING/INVALID/STALE/INCONSISTENT）、`stale`、`staleAfterSeconds` 与 `summary`（安全摘要或null）。缺失/损坏的状态文件不隐藏有效表；摘要与表的原始字节SHA256、日期、更新时间或统计不一致时 `summary=null`，避免拼接旧来源状态和新表。
+
+安全摘要版本1仅允许：
+
+| 字段 | 含义 |
+| --- | --- |
+| schemaVersion | 固定1 |
+| lastAttempt / lastSuccess | 最后检查开始/最后成功核验或发布时间；后者允许null，失败不得刷新 |
+| attemptedDate | 本轮目标表日期，与当前发布日分开 |
+| status / errorCode | 白名单状态及安全错误码，不返回原始错误消息 |
+| published | 当前表dataDate、updatedAt、digest（SHA256）、rowCount、adoptedFields、pendingFields；无有效文件为null |
+| sources | 本轮名单快照，0～50个唯一authorId；每项为authorId、name（旧摘要可缺省）、status、rowCount、errorCode |
+
+每行五个统计字段，非null指标和非“待更新”额度计为采用；含明确条件的已展示值也计入。下一天无新表时，已发布表仍保留其自身日期/统计。后端从固定 `NABAO_STATUS_FILE` 读取不超过64KiB的普通文件，拒绝符号链接、重复/额外字段、无效日期/时间、超过当前5分钟的时间和未知码；不接受请求传入文件路径。`NABAO_STATUS_STALE_SECONDS` 默认43200且最小60，以lastAttempt判断状态陈旧。lastSuccess可以晚于本轮开始时间，不能用开始时间作为成功完成的上限。
+
+Compose专用 `status-data` 卷仅存安全摘要，后端只读挂载；私有 `collector-data` 不共享给后端。摘要原子发布为0644，私有状态保持0600。原文、图片、笔记ID、私有路径、模型结果、token、cookie与签名链接均不属于摘要字段。摘要写入失败不能改变已完成发布的结果。
+
+### 采集控制、作者管理与本人账号登录
+
+Java提供 `/internal/v1/collector` 系列接口，统一要求 `X-Internal-Key` 并返回 `no-store`：
+
+| 方法与路径后缀 | 行为 |
+| --- | --- |
+| `GET /`（前缀本身） | 当前采集、会话、登录任务和定时状态 |
+| `POST /runs` | 202启动当前配置作者的真实采集，完成后页面重读投票表 |
+| `POST /authors` | 昵称与主页链接新增作者，201返回完整状态 |
+| `DELETE /authors/{id}` | 移除作者，200返回完整状态 |
+| `POST /login` | 202创建隔离登录任务，显示正常小红书登录页 |
+| `GET /login/preview` | 返回鉴权PNG预览，不在URL中传递密钥 |
+| `POST /login/complete` | 校验实际登录证据，通过后保存会话；未完成返回409 |
+| `DELETE /login` | 取消登录，保留原正式会话 |
+| `POST /session/check` | 202异步检查已保存会话 |
+
+状态包含 `available`、`busy`、`session`、`run`、`schedule`、`login` 和当前作者 `sources`（id、name、profileUrl）。单个操作只代理固定内部路径，不接受命令、代理目标或文件路径。重复任务返回409，控制服务不可用返回503。单次代理完整响应最多55秒，JSON最大128KiB、PNG最大2MiB；不返回上游原始错误、Cookie或密钥。
+
+新增请求仅含 `{name, profileUrl}`，最多4KiB。昵称去除首尾空白后1～80字符；主页须为 `https://www.xiaohongshu.com/user/profile/<24位十六进制ID>`，可粘贴带查询参数的主页，保存时去除参数。禁止凭据、端口和其他域名，不支持短链接。名单最多50位，允许空名单或1位用于维护，但至少2位才能采集。格式错误400、作者不存在404、重复或服务忙409。配置原子保存于采集器私有目录，重启保留；增删本身不访问小红书或触发采集。历史摘要继续保留当轮作者名单。
+
+`restricted` 表示小红书返回访问限制或安全验证页，不等于登录失效或等待扫码；没有可见二维码不提示用户扫码。控制服务默认每360分钟检查一次，手动采集、定时采集和登录互斥。没有新数据时保留已发布文件和真实表日期。
+
+### 既有兼容接口
+
+以下观察接口为既有兼容接口，匿名设备和健康接口继续供主流程使用。
 
 统一前缀 `/api/v1`。列表使用 `{"items": [...]}`。
 
@@ -43,7 +90,7 @@
 - `DELETE /api/v1/push-devices/{installationId}`：使用 `X-Installation-Key` 退订，成功返回 204，可重复调用。
 - `POST /internal/v1/note-snapshots`：自动发布当前笔记中可明确核对的观察集合，支持删除旧行和幂等。请求失败、缺图、全不可解析不会变成空快照。来源不确定行不投票，报告保持 partial。
 - `POST /internal/v1/observations`：兼容诊断用观察批次，体为 `{"items": [...]}`；已使用完整快照的笔记不能绕回行批次接口。
-- `PUT /internal/v1/runs/{runId}`、`GET /internal/v1/runs`、`GET /internal/v1/runs/{runId}`：上传、查看任务摘要。所有内部接口使用 `X-Internal-Key`；`/admin/` 提供查看页面。
+- `PUT /internal/v1/runs/{runId}`、`GET /internal/v1/runs`、`GET /internal/v1/runs/{runId}`：旧流程上传、查看任务摘要。所有内部接口使用 `X-Internal-Key`；当前管理页不请求这些接口。
 
 完整字段示例见 `backend/README.md`。
 

@@ -72,24 +72,9 @@ public enum Money {
 }
 
 public enum KnownFund {
-    // Exact aliases checked against the public fund catalog and channel pages.
-    // Share class and currency remain significant.
+    // Screenshot names share the directory's company/share matching rules.
     public static func code(for name: String) -> String? {
-        let compact = name.components(separatedBy: .whitespacesAndNewlines).joined()
-            .replacingOccurrences(of: "（", with: "(")
-            .replacingOccurrences(of: "）", with: ")")
-        return [
-            "摩根纳斯达克100指数(QDII)A": "019172",
-            "摩根纳斯达克100指数(QDII)人民币A": "019172",
-            "建信纳斯达克100指数(QDII)A": "539001",
-            "建信纳斯达克100指数(QDII)A人民币": "539001",
-            "南方纳斯达克100指数(QDII)A": "016452",
-            "南方纳斯达克100指数发起(QDII)A": "016452",
-            "南方纳斯达克100指数(QDII)C": "016453",
-            "南方纳斯达克100指数发起(QDII)C": "016453",
-            "南方纳斯达克100指数(QDII)I": "021000",
-            "南方纳斯达克100指数发起(QDII)I": "021000"
-        ][compact]
+        FundCatalog.uniqueMatch(name: name)?.code
     }
 
     public static func alipayDetailURL(for code: String?) -> URL? {

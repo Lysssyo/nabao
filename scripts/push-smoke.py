@@ -68,7 +68,9 @@ def main():
     parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="run-", dir=parent))
     key, public = work / "test-key.p8", work / "test-public.pem"
+    # LibreSSL otherwise emits explicit EC parameters that Java's PKCS#8 reader rejects.
     subprocess.run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256",
+                    "-pkeyopt", "ec_param_enc:named_curve",
                     "-out", str(key)], check=True, capture_output=True)
     key.chmod(0o600)
     subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(public)],
@@ -178,12 +180,24 @@ def main():
         except urllib.error.HTTPError as error:
             return error.code, None
 
+    last_health = [None]
+
     def ready():
         if process.poll() is not None:
             raise AssertionError("Backend exited; inspect the saved local log.")
         try:
             status, data = call("/api/v1/health")
-            return status == 200 and data["push"]["status"] == "READY"
+            push_status = data.get("push", {}).get("status") if isinstance(data, dict) else None
+            safe_status = push_status if push_status in {
+                "READY", "DISABLED", "NOT_CONFIGURED", "INVALID_CONFIGURATION"
+            } else "UNAVAILABLE"
+            health = (status, safe_status)
+            if health != last_health[0]:
+                print(f"Backend health: HTTP {status}; push={safe_status}", flush=True)
+                last_health[0] = health
+            if status == 200 and safe_status in {"DISABLED", "NOT_CONFIGURED", "INVALID_CONFIGURATION"}:
+                raise AssertionError(f"Synthetic APNs fixture is not ready: {safe_status}.")
+            return status == 200 and safe_status == "READY"
         except OSError:
             return False
 

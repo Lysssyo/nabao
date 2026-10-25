@@ -3,7 +3,8 @@ import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { modelConfigFromEnv, requestEvidenceJSON, validateCaptureEvidence, type ModelConfig, type ExtractionResult } from "./extract.js";
 import type { NoteCapture } from "./types.js";
-import { olderPublication, type VotePublication, type VotedField, type UnitContexts } from "./daily-table-voting.js";
+import { acquireProcessLock } from "./process-lock.js";
+import { olderPublication, validPublicationAuthorConfig, type VotePublication, type VotedField, type UnitContexts } from "./daily-table-voting.js";
 import { DAILY_FUND_SOURCE_ALIASES } from "./daily-fund-source-aliases.js";
 
 export const DAILY_TABLE_PROMPT_VERSION = "nasdaq-daily-table-v5";
@@ -68,15 +69,30 @@ function shanghaiDate(timestamp: string | null): string | null {
   if (!timestamp || Number.isNaN(Date.parse(timestamp))) return null;
   return new Date(Date.parse(timestamp) + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+function fullDateEvidence(value: string): { date: string; time: string | null } | null {
+  const match = /^(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})日?(?:(?:\s+|T)(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(value.trim().normalize("NFKC"));
+  if (!match) return null;
+  const date = `${match[1]}-${match[2]!.padStart(2, "0")}-${match[3]!.padStart(2, "0")}`;
+  if (!validDate(date)) return null;
+  if (match[4] === undefined) return { date, time: null };
+  if (Number(match[4]) > 23 || Number(match[5]) > 59 || Number(match[6] ?? "0") > 59) return null;
+  return { date, time: `${match[4].padStart(2, "0")}:${match[5]}:${match[6] ?? "00"}` };
+}
 /** A month/day must match the verified Shanghai publication day; capture time is never used. */
 export function resolveTableDate(raw: string, context: string, publishedAt: string | null): string | null {
+  const full = fullDateEvidence(raw);
+  if (full) {
+    // Header transcriptions may use equivalent separators and include a clock.
+    // Require the same complete date in context; never select among conflicting dates.
+    const tokens = context.normalize("NFKC").match(/(?<!\d)\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}日?(?:(?:\s+|T)\d{1,2}:\d{2}(?::\d{2})?)?(?!\d)/g) ?? [];
+    const evidence = tokens.map(fullDateEvidence);
+    if (!evidence.length || evidence.some((item) => !item || item.date !== full.date)) return null;
+    if (full.time !== null && (!evidence.some((item) => item?.time === full.time)
+      || evidence.some((item) => item?.time !== null && item?.time !== full.time))) return null;
+    return full.date;
+  }
   if (!context.includes(raw)) return null;
   const text = raw.trim().replace(/\s+/g, "");
-  const full = /^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/.exec(text);
-  if (full) {
-    const date = `${full[1]}-${full[2]!.padStart(2, "0")}-${full[3]!.padStart(2, "0")}`;
-    return validDate(date) ? date : null;
-  }
   const published = shanghaiDate(publishedAt);
   const partial = /^(\d{1,2})[/.月-](\d{1,2})日?$/.exec(text);
   if (!published || !partial) return null;
@@ -115,6 +131,7 @@ function limit(value: unknown, dataDate?: string): string | null {
 function identityKey(name: string): string {
   return name.normalize("NFKC").toUpperCase().replace(/\s+/g, "")
     .replace(/纳斯达克/g, "纳指")
+    .replace(/人民币/g, "")
     .replace(/\(?QDII(?:-?LOF)?\)?/g, "")
     .replace(/100|指数|发起式|发起|基金/g, "")
     .replace(/[()（）·・-]/g, "");
@@ -256,6 +273,17 @@ function failureCode(error: unknown): string {
   return error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name) ? "MODEL_TIMEOUT" : "DAILY_TABLE_EXTRACTION_FAILED";
 }
 
+/** A reusable transcription contributes a value or an explicit withdrawal within the requested scope. */
+export function hasReusableDailyTableContent(
+  table: DailyTable | null, expectedCodes: readonly string[], withdrawnFields?: Record<string, VotedField[]>,
+): boolean {
+  const unknownLimit = /^(?:未明确|待更新|未知|不详|暂无(?:数据|信息)?|无数据|待确认|待核实|未公布|未提供|未标注|未注明|缺失|看不清|[-—–‐‑‒―−_]+|N\/A)$/i;
+  return table?.rows.some((row) => expectedCodes.includes(row.fundCode)
+    && ([row.feeRate, row.trackingError, row.return1y].some((value) => value !== null)
+      || (withdrawnFields?.[row.fundCode]?.length ?? 0) > 0
+      || [row.distributorLimit, row.directLimit].some((value) => !unknownLimit.test(value.normalize("NFKC").replace(/\s+/g, ""))))) ?? false;
+}
+
 /** A private global cache can be configured; current evidence is revalidated before every cache read. */
 export async function extractDailyTable(
   capture: NoteCapture, evidenceDirectory: string, sourceName: string,
@@ -267,8 +295,10 @@ export async function extractDailyTable(
   const failed: DailyTableExtraction = { status: "FAILED", table: null, issues: [], promptVersion: DAILY_TABLE_PROMPT_VERSION };
   const evidence = await validateCaptureEvidence(capture, evidenceDirectory);
   if (evidence.length) return { ...failed, issues: evidence.map((issue) => issue.code) };
-  const keyFor = (catalog: readonly TrustedFundIdentity[], codes: readonly string[], promptVersion = DAILY_TABLE_PROMPT_VERSION) => createHash("sha256").update(JSON.stringify({
+  const keyFor = (catalog: readonly TrustedFundIdentity[], codes: readonly string[], promptVersion = DAILY_TABLE_PROMPT_VERSION,
+    includeUpdatedAt = true) => createHash("sha256").update(JSON.stringify({
     promptVersion, revision: capture.revision, publishedAt: capture.sourcePublishedAt,
+    ...(includeUpdatedAt ? { updatedAt: capture.sourceUpdatedAt } : {}),
     model: config.model, baseUrl: config.baseUrl,
     trustedFundCatalog: [...catalog].sort((a, b) => a.code.localeCompare(b.code)), expectedCodes: [...codes].sort(),
   })).digest("hex");
@@ -281,13 +311,20 @@ export async function extractDailyTable(
   // revalidate against today's trusted directory and scope before admitting any vote.
   const legacyVersions = options.requireUnitContext ? [] : /撤回|作废|无法确认|未确定/.test(`${capture.title} ${capture.body}`)
     ? ["nasdaq-daily-table-v4"] : ["nasdaq-daily-table-v4", "nasdaq-daily-table-v3"];
-  const legacyKeys = legacyVersions.flatMap((legacy) => [keyFor(trustedFundCatalog, expectedCodes, legacy),
-    keyFor([], PRIMARY_DAILY_FUND_CODES, legacy), keyFor(trustedFundCatalog, DAILY_FUND_CODES, legacy)]);
-  for (const compatibleKey of new Set([cacheKey, keyFor([], PRIMARY_DAILY_FUND_CODES), keyFor(trustedFundCatalog, DAILY_FUND_CODES), ...legacyKeys])) {
+  // Older keys did not bind the update timestamp used to resolve table dates. Only migrate
+  // those entries when there is no update timestamp, otherwise obtain a fresh transcription.
+  const keyFormats = capture.sourceUpdatedAt === null ? [true, false] : [true];
+  const compatibleKeys = [DAILY_TABLE_PROMPT_VERSION, ...legacyVersions].flatMap((version) => keyFormats.flatMap((includeUpdatedAt) => [
+    keyFor(trustedFundCatalog, expectedCodes, version, includeUpdatedAt), keyFor([], PRIMARY_DAILY_FUND_CODES, version, includeUpdatedAt),
+    keyFor(trustedFundCatalog, DAILY_FUND_CODES, version, includeUpdatedAt),
+  ]));
+  const reusable = (result: DailyTableExtraction) => hasReusableDailyTableContent(result.table, expectedCodes, result.withdrawnFields);
+  for (const compatibleKey of new Set(compatibleKeys)) {
     try {
       const cached = JSON.parse(await readFile(join(cacheDirectory, `daily-table-${compatibleKey}.json`), "utf8")) as unknown;
       if (record(cached) && cached.cacheKey === compatibleKey) {
-        return { ...validateDailyTablePayload(cached.payload, capture, sourceName, trustedFundCatalog, expectedCodes), cacheHit: true };
+        const result = validateDailyTablePayload(cached.payload, capture, sourceName, trustedFundCatalog, expectedCodes);
+        if (reusable(result)) return { ...result, cacheHit: true };
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError)) {
@@ -302,9 +339,10 @@ export async function extractDailyTable(
     const { payload, usage } = await requestEvidenceJSON(capture, evidenceDirectory, config, DAILY_TABLE_PROMPT, {
       sourcePublishedAt: capture.sourcePublishedAt, sourceUpdatedAt: capture.sourceUpdatedAt, trustedFundCatalog, expectedCodes,
     });
-    // Keep even incomplete raw extractions for inspection and continuation without re-paying.
-    await atomicJSON(cachePath, { cacheKey, promptVersion: DAILY_TABLE_PROMPT_VERSION, payload });
-    return { ...validateDailyTablePayload(payload, capture, sourceName, trustedFundCatalog, expectedCodes), cacheHit: false, usage };
+    const result = validateDailyTablePayload(payload, capture, sourceName, trustedFundCatalog, expectedCodes);
+    // Keep useful partial transcriptions without permanently caching a failed or empty extraction.
+    if (reusable(result)) await atomicJSON(cachePath, { cacheKey, promptVersion: DAILY_TABLE_PROMPT_VERSION, payload });
+    return { ...result, cacheHit: false, usage };
   } catch (error) {
     return { ...failed, issues: [failureCode(error)] };
   }
@@ -349,21 +387,16 @@ function completeTable(value: unknown, expectedCodes: readonly string[]): value 
 /** One filesystem lock serializes compare-and-replace, preventing an older run winning a race. */
 export async function publishDailyTable(table: DailyTable, outputDirectory: string, expectedCodes: readonly string[] = DAILY_FUND_CODES,
   publication?: VotePublication): Promise<{ status: "PUBLISHED" | "UNCHANGED" | "OLDER_SKIPPED"; path: string }> {
+  if (publication && !validPublicationAuthorConfig(publication)) throw new Error("TABLE_PUBLICATION_STATE_INVALID");
   if (!completeTable(table, expectedCodes)) throw new Error("TABLE_INCOMPLETE_NOT_PUBLISHED");
   if (table.rows.every((row) => [row.distributorLimit, row.directLimit].every((value) => value === "待更新")
     && row.feeRate === null && row.trackingError === null && row.return1y === null)) throw new Error("TABLE_ALL_UNKNOWN_NOT_PUBLISHED");
   await mkdir(outputDirectory, { recursive: true });
   const lockPath = join(outputDirectory, ".daily-table.lock");
-  let lock;
-  try { lock = await open(lockPath, "wx", 0o600); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("TABLE_PUBLICATION_BUSY");
-    throw error;
-  }
+  const lock = await acquireProcessLock(lockPath, "TABLE_PUBLICATION_BUSY");
   const latestPath = join(outputDirectory, "latest.json");
   const statePath = join(outputDirectory, ".daily-table-state.json");
   try {
-    await lock.writeFile(`${process.pid}\n`);
     let latest: DailyTable | null = null;
     try {
       const parsed = JSON.parse(await readFile(latestPath, "utf8")) as unknown;
@@ -373,7 +406,8 @@ export async function publishDailyTable(table: DailyTable, outputDirectory: stri
     let state: VotePublication | null = null;
     try {
       state = JSON.parse(await readFile(statePath, "utf8")) as VotePublication;
-      if (state.format !== 1 || !Array.isArray(state.watermarks) || !validDate(state.dataDate)) throw new Error("TABLE_PUBLICATION_STATE_INVALID");
+      if (state.format !== 1 || !Array.isArray(state.watermarks) || !validDate(state.dataDate)
+        || !validPublicationAuthorConfig(state)) throw new Error("TABLE_PUBLICATION_STATE_INVALID");
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     if ((state && (!publication || olderPublication(publication, state))) || (latest && (latest.dataDate > table.dataDate
       || (!publication && latest.dataDate === table.dataDate && Date.parse(latest.source.publishedAt) > Date.parse(table.source.publishedAt))))) {
@@ -388,7 +422,7 @@ export async function publishDailyTable(table: DailyTable, outputDirectory: stri
     await atomicJSON(join(outputDirectory, `${table.dataDate}.json`), table, 0o644);
     await atomicJSON(latestPath, table, 0o644);
     return { status: "PUBLISHED", path: latestPath };
-  } finally { await lock.close(); await rm(lockPath, { force: true }); }
+  } finally { await lock.release(); }
 }
 
 /** Auxiliary observations can flag differences, but never override the chosen primary table. */

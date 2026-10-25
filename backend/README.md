@@ -5,9 +5,54 @@ JSON table. Anonymous push registrations remain in the database. Personal invest
 plans and screenshots remain on iOS. Earlier quota-evidence APIs remain available
 for legacy integration checks.
 
-The implementation uses small quota, run-report and push services with `JdbcTemplate`,
-DTOs, controllers, an error handler, and SQL initialization. A static management page
-uses the same HTTP service.
+The backend separates HTTP, application use cases, domain rules and external storage.
+The Vue 3 management application is built separately and served by the same HTTP service.
+
+## Architecture
+
+Java sources live under `src/main/java/com/nabao/`. `NabaoApplication` is the Spring
+Boot entry point; the remaining classes have explicit responsibilities:
+
+| Package | Responsibility |
+| --- | --- |
+| `web` | HTTP routing, request validation, internal-key authorization, cache/status headers and error-to-HTTP mapping |
+| `application` | Daily-table reads/readiness, publication/status reconciliation, legacy ingestion transactions, immutable run uploads, device registration and delivery/retry coordination |
+| `application.port` | The specific repository and provider interfaces required by those use cases |
+| `domain` | Shared values, legacy author/scope consensus and confirmed-limit semantics; no Spring, HTTP, SQL or file access |
+| `infrastructure.file` | Bounded JSON reads, strict file/schema validation and atomic private push-state persistence |
+| `infrastructure.jdbc` | SQL queries, row mapping, author locks, token ownership and guarded device-state updates |
+| `infrastructure.collector` | Fixed-route authenticated collector control, bounded responses and complete-response deadlines |
+| `infrastructure.apns` | HTTP/2 requests, provider response parsing and signing-key/JWT handling |
+
+Controllers call application services. Services depend on domain values and the
+repository/provider interfaces; Spring injects their infrastructure implementations.
+The application and domain packages do not import HTTP controllers or infrastructure
+implementations. Jackson annotations and Bean Validation remain on shared value types
+to preserve the wire contract without duplicating every record.
+
+For example, `DailyTableController` calls `DailyTableService`, which reads through
+`DailyTableRepository`. `JsonDailyTableRepository` owns bounded file parsing and the
+SHA256 of its original bytes. `TableStatusService` separately compares that publication
+with `CollectorStatusRepository` data; a reader implementation cannot silently turn
+a mismatched status into a successful check. Public values remain the collector's
+voting results; the backend does not invent or edit them.
+
+Legacy ingestion keeps transaction boundaries in `QuotaService`; `JdbcQuotaRepository`
+performs the same locked/atomic SQL operations, and `QuotaConsensus` computes results
+without a database. `PushService` coordinates registration and retries through
+`PushDeviceRepository` and `PushGateway`; the JDBC adapter retains token-version and
+installation-creation guards against stale in-flight responses. `TablePushState`
+coordinates confirmed-limit state through `PushStateRepository`, while
+`ConfirmedLimitPolicy` classifies values without reading files.
+
+Use-case failures are `ApplicationFailure` kinds, mapped to the existing HTTP codes
+and detail messages by `web.ApiErrors`. This refactor does not change database schemas,
+public JSON fields, endpoint URLs or stored fingerprints. Existing legacy HTTP APIs
+remain available independently of the current management-page scope.
+
+`ArchitectureTest` enforces the dependency direction using the source tree, without
+an additional framework. The full integration suite still exercises real JDBC/H2,
+bounded files, HTTP contracts, ownership races and restart/retry behavior.
 
 ## Run locally
 
@@ -15,9 +60,9 @@ Use JDK 21 and Maven 3.9.x. Do not change the machine's default JDK if other pro
 For example on this Mac:
 
 ```sh
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 \
-PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH \
-/Users/heqiguang/develop/apache-maven-3.9.8/bin/mvn spring-boot:run
+JAVA_HOME=/Users/Admin/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home \
+PORT=18081 \
+/Users/Admin/dev/tools/apache-maven-3.9.16/bin/mvn spring-boot:run
 ```
 
 The default `local` profile uses persistent H2 storage in `backend/.local/`, which is
@@ -26,14 +71,19 @@ observation writes return HTTP 503 until `INTERNAL_API_KEY` is set. Set this var
 in your local environment without committing it.
 
 ```sh
-curl http://localhost:8080/api/v1/health
-curl http://localhost:8080/api/v1/table
-curl http://localhost:8080/api/v1/sources
-curl 'http://localhost:8080/api/v1/quotas?fundCode=016452'
+curl http://localhost:18081/api/v1/health
+curl http://localhost:18081/api/v1/readiness
+curl http://localhost:18081/api/v1/table
 ```
 
-A fresh installation has two sources and **zero observations**. It does not ship
-sample observations as current quotas.
+A fresh legacy database has two sources and **zero observations**. The current daily
+table uses the collector-managed source list (initially five authors) and a separate public JSON file; database seeds
+are not the source of that table. No sample observations ship as current quotas.
+
+Port 18081 is used for this project's local development; port 8080 belongs to another
+project on this Mac. For the managed local service and iPhone setup, follow
+[`../docs/iphone-quickstart.md`](../docs/iphone-quickstart.md) instead of starting a
+second server on the same port.
 
 ## API
 
@@ -42,8 +92,9 @@ The shared contract is [`../docs/contract.md`](../docs/contract.md).
 | Method and path | Purpose |
 | --- | --- |
 | `GET /api/v1/health` | Database availability and configuration states, never secret values |
+| `GET /api/v1/readiness` | Current table readable: 200 `READY`; missing/invalid: 503 `NOT_READY` |
 | `GET /api/v1/table` | Read the current published JSON file; 404 if absent, 503 if invalid |
-| `GET /api/v1/sources` | Configured public authors |
+| `GET /api/v1/sources` | Legacy database sources; not the current collector author configuration |
 | `GET /api/v1/quotas?fundCode=016452` | Most recent data date for each fund/channel/business/period/currency scope |
 | `POST /api/v1/push-devices` | Register or refresh an anonymous APNs installation |
 | `DELETE /api/v1/push-devices/{installationId}` | Unsubscribe using `X-Installation-Key` |
@@ -52,7 +103,17 @@ The shared contract is [`../docs/contract.md`](../docs/contract.md).
 | `PUT /internal/v1/runs/{runId}` | Store a completed, sanitized collector run report |
 | `GET /internal/v1/runs` | Latest 50 run summaries, protected by `X-Internal-Key` |
 | `GET /internal/v1/runs/{runId}` | Full sanitized report, protected by `X-Internal-Key` |
-| `GET /admin/` | Management page for task results, public quotas and sources |
+| `GET /internal/v1/table-status` | Actual daily table and safe collector status, protected by `X-Internal-Key` |
+| `GET /internal/v1/collector` | Current run, session, login and schedule status |
+| `POST /internal/v1/collector/runs` | Collect the currently configured authors asynchronously (202) |
+| `POST /internal/v1/collector/authors` | Add an author with name and profileUrl (201, full status) |
+| `DELETE /internal/v1/collector/authors/{id}` | Remove an author (200, full status) |
+| `POST /internal/v1/collector/login` | Start an isolated QR login window (202) |
+| `POST /internal/v1/collector/login/complete` | Verify the live authenticated account and commit its session |
+| `DELETE /internal/v1/collector/login` | Cancel the staged login without replacing the previous session |
+| `GET /internal/v1/collector/login/preview` | Authenticated, non-cacheable PNG of the normal login page |
+| `POST /internal/v1/collector/session/check` | Check the actual saved browser session asynchronously (202) |
+| `GET /admin/` | Current daily voting results, sorted by distributor limit, and collection summary |
 
 An empty query returns `{"items":[]}`. `fundCode` is optional and must be a six-digit
 string when supplied. `AGREED` requires at least two source groups and a strict majority.
@@ -63,6 +124,16 @@ The internal POST accepts `{"items":[...]}`, at most 500 rows, and returns
 `{"accepted":2,"duplicates":0}`. Unknown or disabled authors return 422. Invalid fields
 return 400. Wrong or missing key returns 401 when ingestion is configured. An existing
 revision with a changed payload returns 409. A failed batch rolls back completely.
+
+### Collector control
+
+`CollectorController → CollectorService → CollectorGateway → HttpCollectorGateway` keeps HTTP routing, the application boundary and outbound I/O separate. Configure `NABAO_CONTROL_URL` (default `http://127.0.0.1:18082`) and `NABAO_CONTROL_KEY` (defaults to `INTERNAL_API_KEY`). Start the Node collector with `node dist/src/cli.js control`; see [collector setup](../collector/README.md#管理端采集与扫码登录).
+
+All collector management requests require `X-Internal-Key`. Responses, including errors and PNG previews, use `Cache-Control: no-store`. The worker address and routes are fixed by server configuration, never supplied by a request. Raw worker exceptions and credentials are not returned. JSON is limited to128KiB, previews to2MiB, and the55-second timeout covers the complete response body. Redirects are refused. Unavailable workers return503; overlapping work or an unconfirmed login returns409.
+
+Successful JSON responses use the same snapshot shape: `available`, `busy`, `session`, nullable `run`, `schedule`, `login` and the current `sources` (id, name and profileUrl). Starting a run/login/session check returns202 and polling the status tracks it after page refresh. A run reports its true collection outcome; no-new-post keeps the current table and its original date. Session and login states distinguish `restricted` from `expired`; risk pages stop the active browser and pause scheduling until a later explicit check/login succeeds. A restricted-page PNG may remain in worker memory for authenticated inspection, never in public storage. Author configuration accepts 0–50 authors and is stored by the collector. `POST /authors` accepts only `{name, profileUrl}` (at most 4KiB); names are trimmed to 1–80 characters, and profiles must use the exact HTTPS Xiaohongshu profile host/path, without credentials or ports. Query parameters are removed when saved. Invalid input returns400, missing authors404, duplicates or busy workers409. Mutations do not start collection. Fewer than two authors disables collection and scheduling. Signing in still means the user's own collector account; author management is a separate panel.
+
+The Compose collector now runs this service continuously and schedules every360minutes after startup (configurable, minimum60). Port18082 stays inside the Compose network. The Java backend has no read access to the collector's private browser/profile volume and proxies only the allowlisted endpoints.
 
 ### Daily public table
 
@@ -79,7 +150,44 @@ oversized (over 256 KiB), or structurally invalid files return 503. There is no
 fallback to old database quotas or a previously read file. The file's `dataDate`
 remains visible so clients can identify stale data. No model analysis is returned.
 
-### Note publication snapshots
+### Current daily-table management
+
+Open `/admin/` and connect with `INTERNAL_API_KEY`. The page reads
+`/internal/v1/table-status` and `/internal/v1/collector`, and shows the same daily voting results as iOS: data date,
+publication time, last check start, last successful check/publication, adopted/pending
+field counts, and the last run's author names and voting-data row counts with collection errors. The historical summary retains its own author snapshot after the current list changes.
+The displayed table sorts distributor limits in descending order while preserving
+qualified values and their wording. Legacy task/quota/source tabs have been removed.
+The key stays in page memory, is
+cleared from the input after connection, and is never stored or included in a URL.
+
+`NABAO_STATUS_FILE` defaults to `../.local/status/daily-table.json`. The collector
+publishes this allowlisted summary independently of private evidence and watch state.
+The backend reads only the configured regular file, at most 64 KiB; it rejects
+symlinks, malformed/duplicate/unknown fields, invalid dates, future timestamps and
+unknown source/error codes. Raw note text, image/model evidence, private paths,
+credentials and signed URLs are not accepted. Responses use `Cache-Control: no-store`.
+Missing/wrong management keys return 401; an unconfigured key returns 503.
+
+The response separates `tableState` (`AVAILABLE`, `MISSING`, `INVALID`) from
+`summaryState` (`AVAILABLE`, `MISSING`, `INVALID`, `STALE`, `INCONSISTENT`). A valid
+table remains visible if status is missing or invalid. Status older than
+`NABAO_STATUS_STALE_SECONDS` (default 43200, minimum 60) is marked stale. A SHA-256
+digest of exact public bytes, date, publication time and counts bind the summary to
+its table; a mismatch hides summary counters/source states until they agree.
+
+`attemptedDate` belongs to the most recent check; `published.dataDate` belongs to the
+current file. A next-day check without a new table therefore retains the preceding
+table's date and counts. There are five counted fields per row: non-null metrics and
+limits other than `待更新` count as adopted, including explicitly qualified values.
+Counts describe the published display; they do not expose votes or prove a channel
+limit applies to an individual plan. A failed attempt does not advance `lastSuccess`.
+
+`/api/v1/readiness` checks file availability/schema, not age or collector liveness.
+The existing `/api/v1/health` contract remains unchanged. A missing daily table does
+not block authenticated device unsubscribe or change push configuration status.
+
+### Legacy note publication snapshots
 
 The automatic collector publishes through `/internal/v1/note-snapshots`. Its body is:
 
@@ -136,12 +244,12 @@ a snapshot, updates must use the snapshot endpoint; the batch endpoint returns 4
 instead of adding rows outside the complete manifest. Existing legacy rows can be
 adopted by a matching complete snapshot without rewriting evidence.
 
-### Task reports and management page
+### Legacy task reports
 
-Open `http://localhost:8080/admin/`. Public quotas and source configuration are readable
-without the management key; task reports require `INTERNAL_API_KEY`. The browser holds
-the key only in page memory and clears the password input after connecting. It never
-puts the key in a URL or browser storage.
+Database task reports, quotas and sources remain accessible through the existing
+legacy HTTP APIs, independently of the current management page. These do not
+represent the current daily table. Legacy quota/source APIs remain readable without
+a key; task reports require `INTERNAL_API_KEY`.
 
 The collector first saves its local report, then uploads a sanitized summary. Upload
 failure does not change the collection result or delete local evidence. The backend
@@ -160,8 +268,9 @@ fields.
 
 Reports are limited to 60,000 encoded UTF-8 bytes, 20 sources, 100 notes/processing
 entries per source, and 100 issue strings of at most 1,000 characters per list.
-The page renders source strings as text under a restrictive content policy. It
-provides visibility into automatic work; it does not require daily manual imports.
+The current management page renders only the daily voting results and safe collection
+summary as text under a restrictive content policy. Raw legacy reports are available
+through the authenticated APIs above; daily operation does not require manual imports.
 
 ### Evidence and majority rules
 
@@ -260,6 +369,8 @@ resolve those registrations explicitly rather than choosing an owner silently.
 | `SPRING_PROFILES_ACTIVE` | `local` (default) or `mysql` |
 | `INTERNAL_API_KEY` | Shared secret for collector submission; blank disables writes |
 | `NABAO_TABLE_FILE` | Current public table path, default `../.local/public/latest.json` |
+| `NABAO_STATUS_FILE` | Safe collector summary path, default `../.local/status/daily-table.json` |
+| `NABAO_STATUS_STALE_SECONDS` | Status age warning threshold, default `43200`, minimum `60` |
 | `NABAO_PUSH_DATA_SOURCE` | `table` (default) or `legacy`; table mode never queries quota rows |
 | `DB_URL` | MySQL JDBC URL |
 | `DB_USERNAME` | MySQL user, default `nabao` |
@@ -284,6 +395,13 @@ mean Apple accepted a request or a phone received a notification.
 The `mysql` profile uses the same schema with MySQL 8.4. Create database `nabao` with
 UTF-8 (`utf8mb4`) before startup, then provide the JDBC URL, username, and password.
 The root Compose configuration orchestrates the database and service.
+
+Compose shares `public-data` and a dedicated `status-data` volume read-only with the
+backend. The collector alone writes those volumes; private `collector-data` is not
+mounted into the backend. Both images initialize the status directory for collector
+UID 1000. Only the allowlisted summary is mode 0644 for the backend's different UID;
+private evidence/watch JSON retains mode 0600. Existing bind mounts must provide a
+writable collector directory and a readable summary for the backend.
 
 The Docker build context is `backend/`:
 
@@ -327,6 +445,15 @@ missing internal-key configuration. Snapshot tests cover removals, empty withdra
 late revisions, immutable retries, metadata mismatch, legacy adoption and multi-author
 votes. Run-report tests cover authenticated reads/writes, size limits, immutable retry,
 raw-field rejection and the management page.
+
+Daily management tests also cover authenticated reads, independently dated attempts
+and publications, missing/invalid/oversized/private-field status, symlinks and file
+permissions, stale/mismatched summaries, and readiness without blocking unsubscribe.
+After `npm ci` in `collector/`, the admin DOM tests can run separately:
+
+```sh
+node --test src/test/js/admin-status.test.mjs
+```
 
 If a corporate Maven mirror blocks public dependencies, use a separate local settings
 file pointing to Maven Central rather than editing global credentials or settings.

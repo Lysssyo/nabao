@@ -164,6 +164,67 @@ test("publication watermarks prevent same-day revision rollback and advance even
   assert.equal(olderPublication(later.publication, newer.publication), false);
 });
 
+test("removing an author recomputes today's votes and a newer configuration can publish that withdrawal", async (t) => {
+  const path = await mkdtemp(join(tmpdir(), "nabao-author-withdrawal-"));
+  t.after(() => rm(path, { recursive: true, force: true }));
+  const evidence = ids.map((_, index) => input(index, { distributorLimit: index < 3 ? "10" : "20" }));
+  const first = voteDailyTables(evidence, "2026-10-21", ids);
+  first.publication.authorConfig = { revision: 1, authorIds: ids };
+  assert.equal(row(first)!.distributorLimit, "10");
+  await publishDailyTable(first.table!, path, PRIMARY_DAILY_FUND_CODES, first.publication);
+
+  // The removed author's cached observation remains in this input deliberately.
+  const remaining = ids.slice(1);
+  const changed = voteDailyTables(evidence, "2026-10-21", remaining);
+  changed.publication.authorConfig = { revision: 2, authorIds: remaining };
+  assert.equal(row(changed)!.distributorLimit, "待更新");
+  assert.equal(changed.publication.watermarks.some(mark => mark.authorId === ids[0]), false);
+  assert.equal((await publishDailyTable(changed.table!, path, PRIMARY_DAILY_FUND_CODES, changed.publication)).status, "PUBLISHED");
+  const published = JSON.parse(await readFile(join(path, "latest.json"), "utf8"));
+  assert.equal(published.rows.find((item: DailyTableRow) => item.fundCode === "019441").distributorLimit, "待更新");
+  assert.equal(published.authorConfig, undefined);
+  assert.equal((await publishDailyTable(first.table!, path, PRIMARY_DAILY_FUND_CODES, first.publication)).status, "OLDER_SKIPPED");
+  assert.equal(olderPublication({ ...first.publication, dataDate: "2026-10-22" }, changed.publication), true,
+    "an old author configuration cannot return on a later date");
+});
+
+test("author configuration changes cannot discard or regress retained authors' evidence", () => {
+  const original = voteDailyTables([input(0), input(1), input(2)], "2026-10-21", ids);
+  original.publication.authorConfig = { revision: 3, authorIds: ids };
+  const missing = voteDailyTables([input(1), input(2)], "2026-10-21", ids);
+  missing.publication.authorConfig = { revision: 4, authorIds: ids };
+  assert.equal(olderPublication(missing.publication, original.publication), true);
+  missing.publication.authorConfig = { revision: 3, authorIds: ids.slice(1) };
+  assert.equal(olderPublication(missing.publication, original.publication), true,
+    "changing the author set requires a new revision");
+  const older = voteDailyTables([input(1, {}, { time: "2026-10-21T01:00:00Z" }), input(2)], "2026-10-21", ids.slice(1));
+  older.publication.authorConfig = { revision: 4, authorIds: ids.slice(1) };
+  assert.equal(olderPublication(older.publication, original.publication), true);
+  const valid = voteDailyTables([input(1), input(2)], "2026-10-21", ids.slice(1));
+  valid.publication.authorConfig = { revision: 4, authorIds: ids.slice(1) };
+  assert.equal(olderPublication(valid.publication, original.publication), false);
+  const legacy = { ...original.publication }; delete legacy.authorConfig;
+  assert.equal(olderPublication(valid.publication, legacy), false, "existing publication state can adopt author management");
+  assert.equal(olderPublication(legacy, valid.publication), true);
+});
+
+test("malformed author configuration metadata cannot change the published table", async (t) => {
+  const path = await mkdtemp(join(tmpdir(), "nabao-author-metadata-"));
+  t.after(() => rm(path, { recursive: true, force: true }));
+  const initial = voteDailyTables([input(0), input(1)], "2026-10-21", ids);
+  await publishDailyTable(initial.table!, path, PRIMARY_DAILY_FUND_CODES, initial.publication);
+  const before = await readFile(join(path, "latest.json"), "utf8");
+  for (const authorConfig of [
+    { revision: 0, authorIds: ids }, { revision: 1.5, authorIds: ids },
+    { revision: 2, authorIds: [ids[0]!, ids[0]!] }, { revision: 2, authorIds: [] },
+    { revision: 2, authorIds: ["not-an-author"] }, { revision: 2, authorIds: [ids[1]!] },
+  ]) {
+    await assert.rejects(publishDailyTable(initial.table!, path, PRIMARY_DAILY_FUND_CODES,
+      { ...initial.publication, authorConfig }), /TABLE_PUBLICATION_STATE_INVALID/);
+  }
+  assert.equal(await readFile(join(path, "latest.json"), "utf8"), before);
+});
+
 test("run persists same-day valid votes during transient source failure, but never relabels yesterday as today", async (t) => {
   const path = await mkdtemp(join(tmpdir(), "nabao-vote-run-")); t.after(() => rm(path, { recursive: true, force: true }));
   const reportFile = join(path, "report.json");

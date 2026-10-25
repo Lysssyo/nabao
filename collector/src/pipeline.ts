@@ -5,7 +5,8 @@ import { loadFundCatalog } from "./catalog.js";
 import { normalizeRows } from "./normalize.js";
 import { submitSnapshot } from "./submit.js";
 import { writeJson } from "./storage.js";
-import type { NoteCapture } from "./types.js";
+import type { NoteCapture, SourceAuthor } from "./types.js";
+import { sources } from "./sources.js";
 import { contentHash, normalizedTimestamp } from "./rules.js";
 import { createHash } from "node:crypto";
 
@@ -18,8 +19,11 @@ export interface ProcessingResult {
 }
 
 /** One note is the retry boundary; a complete response can publish its verified subset. */
-export async function processCapture(capture: NoteCapture, directory: string, dataDirectory: string): Promise<ProcessingResult> {
+export async function processCapture(capture: NoteCapture, directory: string, dataDirectory: string, authors: readonly SourceAuthor[] = sources): Promise<ProcessingResult> {
   const result: ProcessingResult = { status: "partial", stage: "capture", observationCount: 0, issues: [] };
+  if (!authors.some(source => source.id === capture.authorId)) {
+    result.issues.push("AUTHOR_NOT_CONFIGURED"); return result;
+  }
   if (!capture.revision || !["success", "no-change"].includes(capture.captureStatus) || capture.issues.length) {
     result.issues.push("CAPTURE_INCOMPLETE");
     return result;
@@ -61,7 +65,7 @@ export async function processCapture(capture: NoteCapture, directory: string, da
   result.stage = "normalization";
   try {
     const catalog = await loadFundCatalog(dataDirectory);
-    const normalized = normalizeRows(extraction.rows, capture, catalog.funds);
+    const normalized = normalizeRows(extraction.rows, capture, catalog.funds, authors);
     result.observationCount = normalized.items.length;
     await writeJson(join(directory, "normalized.json"), normalized);
     result.issues.push(...normalized.issues.map((item) => item.code));
@@ -85,7 +89,7 @@ export async function processCapture(capture: NoteCapture, directory: string, da
       };
       await writeJson(join(directory, "publication.json"), publication);
       const response = await submitSnapshot({ ...capture, revision: publicationRevision },
-        normalized.items.map((item) => ({ ...item, noteRevision: publicationRevision })));
+        normalized.items.map((item) => ({ ...item, noteRevision: publicationRevision })), authors);
       await writeJson(join(directory, "submission.json"), response);
       result.published = true;
       result.status = result.issues.length ? "partial" : "published";

@@ -1,119 +1,390 @@
 // !$*UTF8*$!
 {
-    archiveVersion = 1;
-    classes = {};
-    objectVersion = 56;
-    objects = {
-        A00000000000000000000001 = {isa = PBXBuildFile; fileRef = B00000000000000000000001; };
-        A00000000000000000000002 = {isa = PBXBuildFile; fileRef = B00000000000000000000002; };
-        A00000000000000000000003 = {isa = PBXBuildFile; fileRef = B00000000000000000000003; };
-        A00000000000000000000004 = {isa = PBXBuildFile; fileRef = B00000000000000000000004; };
-        A00000000000000000000005 = {isa = PBXBuildFile; fileRef = B00000000000000000000005; };
-        A00000000000000000000006 = {isa = PBXBuildFile; fileRef = B00000000000000000000006; };
-        A00000000000000000000007 = {isa = PBXBuildFile; fileRef = B00000000000000000000007; };
-        A00000000000000000000008 = {isa = PBXBuildFile; fileRef = B00000000000000000000009; };
-        A00000000000000000000012 = {isa = PBXBuildFile; fileRef = B00000000000000000000012; };
-        A00000000000000000000010 = {isa = PBXBuildFile; productRef = F00000000000000000000002; };
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
 
-        B00000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NabaoApp.swift; sourceTree = "<group>"; };
-        B00000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanStore.swift; sourceTree = "<group>"; };
-        B00000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImport.swift; sourceTree = "<group>"; };
-        B00000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansView.swift; sourceTree = "<group>"; };
-        B00000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanDetailView.swift; sourceTree = "<group>"; };
-        B00000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotasView.swift; sourceTree = "<group>"; };
-        B00000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-        B00000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-        B00000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-        B00000000000000000000010 = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Nabao.app; sourceTree = BUILT_PRODUCTS_DIR; };
-        B00000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = folder; path = NabaoCore; sourceTree = "<group>"; };
-        B00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemotePushStore.swift; sourceTree = "<group>"; };
+/* Begin PBXBuildFile section */
+		A00000000000000000000001 /* NabaoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* NabaoApp.swift */; };
+		A00000000000000000000002 /* PlanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* PlanStore.swift */; };
+		A00000000000000000000003 /* ScreenshotImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* ScreenshotImport.swift */; };
+		A00000000000000000000004 /* PlansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* PlansView.swift */; };
+		A00000000000000000000005 /* PlanDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* PlanDetailView.swift */; };
+		A00000000000000000000006 /* QuotasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* QuotasView.swift */; };
+		A00000000000000000000007 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* SettingsView.swift */; };
+		A00000000000000000000008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* PrivacyInfo.xcprivacy */; };
+		A00000000000000000000010 /* NabaoCore in Frameworks */ = {isa = PBXBuildFile; productRef = F00000000000000000000002 /* NabaoCore */; };
+		A00000000000000000000012 /* RemotePushStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* RemotePushStore.swift */; };
+		A00000000000000000000013 /* FundPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* FundPickerView.swift */; };
+		A00000000000000000000014 /* PlanBackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* PlanBackupView.swift */; };
+		A00000000000000000000015 /* NotificationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* NotificationRouter.swift */; };
+		A00000000000000000000016 /* PlanDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* PlanDraft.swift */; };
+		A00000000000000000000017 /* ImportReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* ImportReviewView.swift */; };
+		A00000000000000000000018 /* FundTableDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* FundTableDetailView.swift */; };
+		A00000000000000000000019 /* FundTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* FundTableCells.swift */; };
+		A00000000000000000000020 /* PlanBackupFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* PlanBackupFiles.swift */; };
+		A00000000000000000000021 /* LocalReminderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* LocalReminderStore.swift */; };
+		A00000000000000000000022 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000022 /* Clipboard.swift */; };
+		A00000000000000000000023 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* AppConfiguration.swift */; };
+		A00000000000000000000024 /* BackendConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000024 /* BackendConnectionView.swift */; };
+		A00000000000000000000025 /* PlanOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000025 /* PlanOverviewView.swift */; };
+		A00000000000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000026 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
 
-        C00000000000000000000001 = {
-            isa = PBXGroup;
-            children = (C00000000000000000000002, B00000000000000000000011, C00000000000000000000003);
-            sourceTree = "<group>";
-        };
-        C00000000000000000000002 = {
-            isa = PBXGroup;
-            children = (B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B00000000000000000000012);
-            path = App; sourceTree = "<group>";
-        };
-        C00000000000000000000003 = {
-            isa = PBXGroup; children = (B00000000000000000000010); name = Products; sourceTree = "<group>";
-        };
+/* Begin PBXFileReference section */
+		B00000000000000000000001 /* NabaoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NabaoApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* PlanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 /* ScreenshotImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImport.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 /* PlansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansView.swift; sourceTree = "<group>"; };
+		B00000000000000000000005 /* PlanDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanDetailView.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 /* QuotasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotasView.swift; sourceTree = "<group>"; };
+		B00000000000000000000007 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000009 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B00000000000000000000010 /* Nabao.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Nabao.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000011 /* NabaoCore */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NabaoCore; sourceTree = "<group>"; };
+		B00000000000000000000012 /* RemotePushStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemotePushStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* FundPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundPickerView.swift; sourceTree = "<group>"; };
+		B00000000000000000000014 /* PlanBackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanBackupView.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 /* NotificationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationRouter.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 /* PlanDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanDraft.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 /* ImportReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReviewView.swift; sourceTree = "<group>"; };
+		B00000000000000000000018 /* FundTableDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundTableDetailView.swift; sourceTree = "<group>"; };
+		B00000000000000000000019 /* FundTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundTableCells.swift; sourceTree = "<group>"; };
+		B00000000000000000000020 /* PlanBackupFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanBackupFiles.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* LocalReminderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalReminderStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* Clipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Clipboard.swift; sourceTree = "<group>"; };
+		B00000000000000000000023 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* BackendConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendConnectionView.swift; sourceTree = "<group>"; };
+		B00000000000000000000025 /* PlanOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanOverviewView.swift; sourceTree = "<group>"; };
+		B00000000000000000000026 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
-        D00000000000000000000001 = {
-            isa = PBXProject;
-            attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2700; };
-            buildConfigurationList = E00000000000000000000001;
-            compatibilityVersion = "Xcode 14.0";
-            developmentRegion = "zh-Hans";
-            hasScannedForEncodings = 0;
-            knownRegions = ("zh-Hans", en, Base);
-            mainGroup = C00000000000000000000001;
-            packageReferences = (F00000000000000000000001);
-            productRefGroup = C00000000000000000000003;
-            projectDirPath = "";
-            projectRoot = "";
-            targets = (D00000000000000000000002);
-        };
-        D00000000000000000000002 = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = E00000000000000000000002;
-            buildPhases = (D00000000000000000000003, D00000000000000000000004, D00000000000000000000005);
-            buildRules = (); dependencies = ();
-            name = Nabao;
-            packageProductDependencies = (F00000000000000000000002);
-            productName = Nabao;
-            productReference = B00000000000000000000010;
-            productType = "com.apple.product-type.application";
-        };
-        D00000000000000000000003 = {
-            isa = PBXSourcesBuildPhase; buildActionMask = 2147483647;
-            files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A00000000000000000000012);
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        D00000000000000000000004 = {
-            isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647;
-            files = (A00000000000000000000010); runOnlyForDeploymentPostprocessing = 0;
-        };
-        D00000000000000000000005 = {
-            isa = PBXResourcesBuildPhase; buildActionMask = 2147483647;
-            files = (A00000000000000000000008); runOnlyForDeploymentPostprocessing = 0;
-        };
+/* Begin PBXFrameworksBuildPhase section */
+		D00000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000010 /* NabaoCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
-        E00000000000000000000001 = {
-            isa = XCConfigurationList;
-            buildConfigurations = (E00000000000000000000003, E00000000000000000000004);
-            defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;
-        };
-        E00000000000000000000002 = {
-            isa = XCConfigurationList;
-            buildConfigurations = (E00000000000000000000005, E00000000000000000000006);
-            defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;
-        };
-        E00000000000000000000003 = {
-            isa = XCBuildConfiguration;
-            buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; ENABLE_TESTABILITY = YES; ONLY_ACTIVE_ARCH = YES; };
-            name = Debug;
-        };
-        E00000000000000000000004 = {
-            isa = XCBuildConfiguration;
-            buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; };
-            name = Release;
-        };
-        E00000000000000000000005 = {
-            isa = XCBuildConfiguration;
-            buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.example.nabao; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; };
-            name = Debug;
-        };
-        E00000000000000000000006 = {
-            isa = XCBuildConfiguration;
-            buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.example.nabao; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; };
-            name = Release;
-        };
-        F00000000000000000000001 = {isa = XCLocalSwiftPackageReference; relativePath = NabaoCore; };
-        F00000000000000000000002 = {isa = XCSwiftPackageProductDependency; package = F00000000000000000000001; productName = NabaoCore; };
-    };
-    rootObject = D00000000000000000000001;
+/* Begin PBXGroup section */
+		C00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000002 /* App */,
+				B00000000000000000000011 /* NabaoCore */,
+				C00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C00000000000000000000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000004 /* Entry */,
+				C00000000000000000000005 /* Features */,
+				C00000000000000000000009 /* Services */,
+				C00000000000000000000010 /* Shared */,
+				B00000000000000000000026 /* Assets.xcassets */,
+				B00000000000000000000008 /* Info.plist */,
+				B00000000000000000000009 /* PrivacyInfo.xcprivacy */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000010 /* Nabao.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000004 /* Entry */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000001 /* NabaoApp.swift */,
+				B00000000000000000000015 /* NotificationRouter.swift */,
+			);
+			path = Entry;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000005 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000006 /* Plans */,
+				C00000000000000000000007 /* Quotas */,
+				C00000000000000000000008 /* Settings */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000006 /* Plans */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000025 /* PlanOverviewView.swift */,
+				B00000000000000000000004 /* PlansView.swift */,
+				B00000000000000000000005 /* PlanDetailView.swift */,
+				B00000000000000000000016 /* PlanDraft.swift */,
+				B00000000000000000000017 /* ImportReviewView.swift */,
+			);
+			path = Plans;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000007 /* Quotas */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000006 /* QuotasView.swift */,
+				B00000000000000000000018 /* FundTableDetailView.swift */,
+				B00000000000000000000019 /* FundTableCells.swift */,
+			);
+			path = Quotas;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000008 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000024 /* BackendConnectionView.swift */,
+				B00000000000000000000007 /* SettingsView.swift */,
+				B00000000000000000000014 /* PlanBackupView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000009 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000023 /* AppConfiguration.swift */,
+				B00000000000000000000002 /* PlanStore.swift */,
+				B00000000000000000000003 /* ScreenshotImport.swift */,
+				B00000000000000000000012 /* RemotePushStore.swift */,
+				B00000000000000000000020 /* PlanBackupFiles.swift */,
+				B00000000000000000000021 /* LocalReminderStore.swift */,
+				B00000000000000000000022 /* Clipboard.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000010 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000013 /* FundPickerView.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D00000000000000000000002 /* Nabao */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E00000000000000000000002 /* Build configuration list for PBXNativeTarget "Nabao" */;
+			buildPhases = (
+				D00000000000000000000003 /* Sources */,
+				D00000000000000000000004 /* Frameworks */,
+				D00000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Nabao;
+			packageProductDependencies = (
+				F00000000000000000000002 /* NabaoCore */,
+			);
+			productName = Nabao;
+			productReference = B00000000000000000000010 /* Nabao.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = E00000000000000000000001 /* Build configuration list for PBXProject "Nabao" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = C00000000000000000000001;
+			packageReferences = (
+				F00000000000000000000001 /* XCLocalSwiftPackageReference "NabaoCore" */,
+			);
+			productRefGroup = C00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D00000000000000000000002 /* Nabao */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D00000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000026 /* Assets.xcassets in Resources */,
+				A00000000000000000000008 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D00000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000025 /* PlanOverviewView.swift in Sources */,
+				A00000000000000000000024 /* BackendConnectionView.swift in Sources */,
+				A00000000000000000000023 /* AppConfiguration.swift in Sources */,
+				A00000000000000000000001 /* NabaoApp.swift in Sources */,
+				A00000000000000000000002 /* PlanStore.swift in Sources */,
+				A00000000000000000000003 /* ScreenshotImport.swift in Sources */,
+				A00000000000000000000004 /* PlansView.swift in Sources */,
+				A00000000000000000000005 /* PlanDetailView.swift in Sources */,
+				A00000000000000000000006 /* QuotasView.swift in Sources */,
+				A00000000000000000000007 /* SettingsView.swift in Sources */,
+				A00000000000000000000012 /* RemotePushStore.swift in Sources */,
+				A00000000000000000000013 /* FundPickerView.swift in Sources */,
+				A00000000000000000000014 /* PlanBackupView.swift in Sources */,
+				A00000000000000000000015 /* NotificationRouter.swift in Sources */,
+				A00000000000000000000016 /* PlanDraft.swift in Sources */,
+				A00000000000000000000017 /* ImportReviewView.swift in Sources */,
+				A00000000000000000000018 /* FundTableDetailView.swift in Sources */,
+				A00000000000000000000019 /* FundTableCells.swift in Sources */,
+				A00000000000000000000020 /* PlanBackupFiles.swift in Sources */,
+				A00000000000000000000021 /* LocalReminderStore.swift in Sources */,
+				A00000000000000000000022 /* Clipboard.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		E00000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E00000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E00000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RY3W6S484B;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nabao.dev.ry3w6s484b;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		E00000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RY3W6S484B;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nabao.dev.ry3w6s484b;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E00000000000000000000001 /* Build configuration list for PBXProject "Nabao" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E00000000000000000000003 /* Debug */,
+				E00000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E00000000000000000000002 /* Build configuration list for PBXNativeTarget "Nabao" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E00000000000000000000005 /* Debug */,
+				E00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		F00000000000000000000001 /* XCLocalSwiftPackageReference "NabaoCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = NabaoCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F00000000000000000000002 /* NabaoCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F00000000000000000000001 /* XCLocalSwiftPackageReference "NabaoCore" */;
+			productName = NabaoCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D00000000000000000000001 /* Project object */;
 }

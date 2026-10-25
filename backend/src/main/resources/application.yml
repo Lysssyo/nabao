@@ -6,6 +6,11 @@ spring:
   sql:
     init:
       mode: always
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-store: true
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -18,7 +23,12 @@ server:
     include-stacktrace: never
 nabao:
   internal-key: ${INTERNAL_API_KEY:}
+  collector:
+    url: ${NABAO_CONTROL_URL:http://127.0.0.1:18082}
+    key: ${NABAO_CONTROL_KEY:${INTERNAL_API_KEY:}}
   table-file: ${NABAO_TABLE_FILE:../.local/public/latest.json}
+  status-file: ${NABAO_STATUS_FILE:../.local/status/daily-table.json}
+  status-stale-seconds: ${NABAO_STATUS_STALE_SECONDS:43200}
   push-data-source: ${NABAO_PUSH_DATA_SOURCE:table}
   push-state-file: ${NABAO_PUSH_STATE_FILE:.local/push/table-state.json}
   apns:

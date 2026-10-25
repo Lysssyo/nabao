@@ -96,6 +96,19 @@ final class ScreenshotParserTests: XCTestCase {
         XCTAssertFalse(result.plans[0].notes.contains(where: { $0.contains("推测") }))
     }
 
+    func testScreenshotNamesWithoutCurrencyMatchTheWholeDirectory() {
+        for (name, code) in [("嘉实纳指100C", "016533"), ("广发纳斯达克100ETF联接C", "006479"),
+                             ("易方达纳指100联接C", "012870"), ("华泰柏瑞纳指I", "022664")] {
+            let result = ScreenshotParser.parse([
+                line("投资计划", 0.08), line(name + " 详情", 0.2), line("每日定投", 0.25),
+                line("买入金额", 0.35), OCRLine(text: "10.00元", x: 0.7, y: 0.351)
+            ])
+            XCTAssertEqual(result.plans.count, 1, name)
+            XCTAssertEqual(result.plans.first?.fundCode, code, name)
+            XCTAssertFalse(result.plans.first?.notes.contains(where: { $0.contains("补充六位代码") }) ?? true, name)
+        }
+    }
+
     private func line(_ text: String, _ y: Double) -> OCRLine { OCRLine(text: text, x: 0.05, y: y) }
     private func alipay() -> [OCRLine] {
         [

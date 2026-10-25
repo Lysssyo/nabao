@@ -1,9 +1,9 @@
 import type { Observation } from "./types.js";
 import { normalizedTimestamp } from "./rules.js";
 import { sources } from "./sources.js";
-import type { NoteCapture } from "./types.js";
+import type { NoteCapture, SourceAuthor } from "./types.js";
 
-export function validateObservations(input: unknown): Observation[] {
+export function validateObservations(input: unknown, authors: readonly SourceAuthor[] = sources): Observation[] {
   if (!input || typeof input !== "object" || !("items" in input) || !Array.isArray(input.items)
     || input.items.length < 1 || input.items.length > 500) throw new Error("items must contain 1–500 reviewed observations.");
   return input.items.map((item: unknown, index: number) => {
@@ -13,7 +13,7 @@ export function validateObservations(input: unknown): Observation[] {
     for (const field of ["authorId", "noteId", "noteRevision", "fundCode", "fundName", "evidenceRef"] as const) {
       if (typeof record[field] !== "string" || !record[field].trim()) fail(field);
     }
-    if (!sources.some((source) => source.id === record.authorId)) fail("authorId");
+    if (!authors.some((source) => source.id === record.authorId)) fail("authorId");
     if (!/^[a-f0-9]{24}$/i.test(String(record.noteId))) fail("noteId");
     if (!/^[a-f0-9]{64}$/i.test(String(record.noteRevision))) fail("noteRevision");
     if (!/^\d{6}$/.test(String(record.fundCode))) fail("fundCode");
@@ -44,13 +44,14 @@ export function validateObservations(input: unknown): Observation[] {
   });
 }
 
-export async function submitReviewed(input: unknown): Promise<{ status: number; result: unknown }> {
-  const items = validateObservations(input);
+export async function submitReviewed(input: unknown, authors: readonly SourceAuthor[] = sources): Promise<{ status: number; result: unknown }> {
+  const items = validateObservations(input, authors);
   return postInternal("/internal/v1/observations", { items });
 }
 
-export async function submitSnapshot(capture: NoteCapture, items: Observation[]): Promise<{ status: number; result: unknown }> {
-  if (items.length) validateObservations({ items });
+export async function submitSnapshot(capture: NoteCapture, items: Observation[], authors: readonly SourceAuthor[] = sources): Promise<{ status: number; result: unknown }> {
+  if (!authors.some(source => source.id === capture.authorId)) throw new Error("AUTHOR_NOT_CONFIGURED");
+  if (items.length) validateObservations({ items }, authors);
   return postInternal("/internal/v1/note-snapshots", {
     authorId: capture.authorId, noteId: capture.noteId, noteRevision: capture.revision,
     sourcePublishedAt: capture.sourcePublishedAt, sourceUpdatedAt: capture.sourceUpdatedAt,

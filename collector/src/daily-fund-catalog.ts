@@ -24,11 +24,11 @@ export const DAILY_FUND_CATALOG: readonly TrustedFundIdentity[] = [
   },
   {
     "code": "539001",
-    "name": "建信纳斯达克100指数(QDII)A人民币"
+    "name": "建信纳斯达克100指数(QDII)A"
   },
   {
     "code": "012752",
-    "name": "建信纳斯达克100指数(QDII)C人民币"
+    "name": "建信纳斯达克100指数(QDII)C"
   },
   {
     "code": "016452",
@@ -40,23 +40,23 @@ export const DAILY_FUND_CATALOG: readonly TrustedFundIdentity[] = [
   },
   {
     "code": "019736",
-    "name": "宝盈纳斯达克100指数发起(QDII)A人民币"
+    "name": "宝盈纳斯达克100指数发起(QDII)A"
   },
   {
     "code": "019737",
-    "name": "宝盈纳斯达克100指数发起(QDII)C人民币"
+    "name": "宝盈纳斯达克100指数发起(QDII)C"
   },
   {
     "code": "023422",
-    "name": "建信纳斯达克100指数(QDII)D人民币"
+    "name": "建信纳斯达克100指数(QDII)D"
   },
   {
     "code": "019172",
-    "name": "摩根纳斯达克100指数(QDII)人民币A"
+    "name": "摩根纳斯达克100指数(QDII)A"
   },
   {
     "code": "019173",
-    "name": "摩根纳斯达克100指数(QDII)人民币C"
+    "name": "摩根纳斯达克100指数(QDII)C"
   },
   {
     "code": "019524",
@@ -96,15 +96,15 @@ export const DAILY_FUND_CATALOG: readonly TrustedFundIdentity[] = [
   },
   {
     "code": "021778",
-    "name": "广发纳指100ETF联接(QDII)人民币F"
+    "name": "广发纳指100ETF联接(QDII)F"
   },
   {
     "code": "270042",
-    "name": "广发纳斯达克100ETF联接人民币(QDII)A"
+    "name": "广发纳斯达克100ETF联接(QDII)A"
   },
   {
     "code": "006479",
-    "name": "广发纳斯达克100ETF联接人民币(QDII)C"
+    "name": "广发纳斯达克100ETF联接(QDII)C"
   },
   {
     "code": "019547",
@@ -116,23 +116,23 @@ export const DAILY_FUND_CATALOG: readonly TrustedFundIdentity[] = [
   },
   {
     "code": "161130",
-    "name": "易方达纳斯达克100ETF联接(QDII-LOF)A(人民币)"
+    "name": "易方达纳斯达克100ETF联接(QDII-LOF)A"
   },
   {
     "code": "012870",
-    "name": "易方达纳斯达克100ETF联接(QDII-LOF)C(人民币)"
+    "name": "易方达纳斯达克100ETF联接(QDII-LOF)C"
   },
   {
     "code": "018966",
-    "name": "汇添富纳斯达克100ETF发起式联接(QDII)人民币A"
+    "name": "汇添富纳斯达克100ETF发起式联接(QDII)A"
   },
   {
     "code": "018967",
-    "name": "汇添富纳斯达克100ETF发起式联接(QDII)人民币C"
+    "name": "汇添富纳斯达克100ETF发起式联接(QDII)C"
   },
   {
     "code": "021773",
-    "name": "汇添富纳斯达克100ETF发起式联接(QDII)人民币E"
+    "name": "汇添富纳斯达克100ETF发起式联接(QDII)E"
   },
   {
     "code": "015299",
@@ -144,26 +144,26 @@ export const DAILY_FUND_CATALOG: readonly TrustedFundIdentity[] = [
   },
   {
     "code": "016055",
-    "name": "博时纳斯达克100ETF发起式联接(QDII)A人民币"
+    "name": "博时纳斯达克100ETF发起式联接(QDII)A"
   },
   {
     "code": "016057",
-    "name": "博时纳斯达克100ETF发起式联接(QDII)C人民币"
+    "name": "博时纳斯达克100ETF发起式联接(QDII)C"
   },
   {
     "code": "024237",
-    "name": "博时纳斯达克100ETF发起式联接(QDII)I人民币"
+    "name": "博时纳斯达克100ETF发起式联接(QDII)I"
   },
   {
     "code": "016532",
-    "name": "嘉实纳斯达克100ETF发起式联接(QDII)A人民币"
+    "name": "嘉实纳斯达克100ETF发起式联接(QDII)A"
   },
   {
     "code": "016533",
-    "name": "嘉实纳斯达克100ETF发起式联接(QDII)C人民币"
+    "name": "嘉实纳斯达克100ETF发起式联接(QDII)C"
   },
   {
     "code": "021838",
-    "name": "嘉实纳斯达克100ETF发起式联接(QDII)I人民币"
+    "name": "嘉实纳斯达克100ETF发起式联接(QDII)I"
   }
 ];

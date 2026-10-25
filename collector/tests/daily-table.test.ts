@@ -37,6 +37,38 @@ async function directory(t: TestContext): Promise<string> {
   return path;
 }
 
+async function extractionFixture(t: TestContext, nextPayload: () => unknown) {
+  const path = await directory(t);
+  const cacheDirectory = await directory(t);
+  const priorCache = process.env.NABAO_TABLE_CACHE_DIR;
+  process.env.NABAO_TABLE_CACHE_DIR = cacheDirectory;
+  t.after(() => { if (priorCache === undefined) delete process.env.NABAO_TABLE_CACHE_DIR; else process.env.NABAO_TABLE_CACHE_DIR = priorCache; });
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+sRe8AAAAASUVORK5CYII=", "base64");
+  await writeFile(join(path, "image-0.png"), png);
+  const evidence: NoteCapture = { ...capture, images: [{
+    ordinal: 0, sourceUrl: "https://test.xhscdn.com/a.png", file: "image-0.png", mediaType: "image/png", size: png.length,
+    sha256: createHash("sha256").update(png).digest("hex"),
+  }] };
+  evidence.revision = contentHash(evidence.title, evidence.body, evidence.images);
+  let calls = 0;
+  const server = createServer(async (req, res) => {
+    for await (const _chunk of req) { /* consume the local model request */ }
+    calls++;
+    res.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(nextPayload()) } }] }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const config = { apiKey: "test-api-key", model: "test-image-model", baseUrl: `http://127.0.0.1:${address.port}` };
+  // The previous format omitted the update timestamp. Keep this fixture independent of the new key format.
+  const legacyKey = createHash("sha256").update(JSON.stringify({
+    promptVersion: DAILY_TABLE_PROMPT_VERSION, revision: evidence.revision, publishedAt: evidence.sourcePublishedAt,
+    model: config.model, baseUrl: config.baseUrl, trustedFundCatalog: [], expectedCodes: [...DAILY_FUND_CODES].sort(),
+  })).digest("hex");
+  return { path, cacheDirectory, evidence, config, legacyKey, get calls() { return calls; } };
+}
+
 test("table transcribes all 44 specified funds and only publishes the display contract", () => {
   const data = table();
   assert.equal(data.rows.length, 44);
@@ -54,6 +86,28 @@ test("month-day titles use verified Shanghai publication date, never capture dat
   assert.equal(resolveTableDate("10/21", "今日10/21限额", "2026-10-20T02:00:00Z"), null);
   assert.equal(resolveTableDate("2026-02-31", "2026-02-31限额", capture.sourcePublishedAt), null);
   assert.equal(resolveTableDate("12/31", "12/31日起生效", "2027-01-01T00:00:00Z"), null);
+});
+
+test("full-date headers accept a verified clock and equivalent separators without guessing around conflicts", () => {
+  const day = "2026-10-23";
+  const published = "2026-10-23T07:00:00Z";
+  assert.equal(resolveTableDate("2026.10.23 09:29", "公开资料更新：2026-10-23 09:29", published), day);
+  assert.equal(resolveTableDate("2026/10/23 9:29:00", "公开资料更新：2026年10月23日 09:29", published), day);
+  assert.equal(resolveTableDate("2026.10.23", "2026-10-23 | 周五 每日更新", published), day);
+  for (const raw of ["2026.10.23 24:00", "2026.10.23 09:60", "2026.10.23 09:29:60",
+    "2026.02.30 09:29", "2026.10.23 09:29随意后缀", "2026.10.23 09:29 / 2026.10.24"]) {
+    assert.equal(resolveTableDate(raw, raw, published), null);
+  }
+  for (const context of ["公开资料更新：2026-10-22 09:29", "2026-10-23 09:30", "2026-10-23",
+    "2026-10-22 09:29 / 2026-10-23 09:29", "2026-10-23 09:29 / 2026-10-23 09:30"]) {
+    assert.equal(resolveTableDate("2026.10.23 09:29", context, published), null);
+  }
+  const raw = payload("2026.10.23 09:29");
+  raw.dateContext = "公开资料更新：2026-10-23 09:29";
+  const note = { ...capture, sourcePublishedAt: published };
+  assert.equal(validateDailyTablePayload(raw, note, "source").table?.dataDate, day);
+  raw.pageDates[1] = "2026.10.22 09:29";
+  assert.deepEqual(validateDailyTablePayload(raw, note, "source").issues, ["TABLE_PAGE_DATES_DISAGREE"]);
 });
 
 test("old image-table date is retained despite newer title or capture", () => {
@@ -194,6 +248,100 @@ test("real HTTP extraction reuses a private global cache across runs after valid
   assert.equal(tampered.status, "FAILED");
   assert.equal(tampered.issues[0], "IMAGE_HASH_MISMATCH");
   assert.equal(calls, 2);
+});
+
+test("failed, unusable and unknown-only model payloads do not prevent a later successful extraction", async (t) => {
+  const unknown = payload();
+  for (const row of unknown.rows) {
+    Object.assign(row, { feeRate: null, trackingError: null, return1y: null, distributorLimit: "未明确", directLimit: "待更新" });
+  }
+  const unusable = payload();
+  for (const row of unusable.rows) row.fundCode = "000001";
+  for (const [label, invalid] of [["schema invalid", {}], ["all rows rejected", unusable], ["all fields unknown", unknown]] as const) {
+    await t.test(label, async (t) => {
+      let response: unknown = invalid;
+      const fixture = await extractionFixture(t, () => response);
+      const first = await extractDailyTable(fixture.evidence, fixture.path, "source", fixture.config);
+      assert.equal(first.cacheHit, false);
+      assert.deepEqual(await readdir(fixture.cacheDirectory), [], "unusable output must not become a reusable cache");
+      response = payload();
+      const recovered = await extractDailyTable(fixture.evidence, fixture.path, "source", fixture.config);
+      assert.equal(recovered.status, "COMPLETE");
+      assert.equal(recovered.cacheHit, false);
+      assert.equal(fixture.calls, 2);
+      const reused = await extractDailyTable(fixture.evidence, fixture.path, "source", { ...fixture.config, apiKey: "" });
+      assert.equal(reused.status, "COMPLETE");
+      assert.equal(reused.cacheHit, true);
+      assert.equal(fixture.calls, 2);
+    });
+  }
+});
+
+test("invalid entries left by earlier runs are skipped and replaced after recovery", async (t) => {
+  const fixture = await extractionFixture(t, () => payload());
+  await writeFile(join(fixture.cacheDirectory, `daily-table-${fixture.legacyKey}.json`), JSON.stringify({
+    cacheKey: fixture.legacyKey, payload: {},
+  }));
+  const recovered = await extractDailyTable(fixture.evidence, fixture.path, "source", fixture.config);
+  assert.equal(recovered.status, "COMPLETE");
+  assert.equal(recovered.cacheHit, false);
+  const currentFile = (await readdir(fixture.cacheDirectory)).find((file) => !file.includes(fixture.legacyKey))!;
+  assert.ok(currentFile);
+  const cached = JSON.parse(await readFile(join(fixture.cacheDirectory, currentFile), "utf8"));
+  const unusable = payload();
+  for (const row of unusable.rows) row.fundCode = "000001";
+  await writeFile(join(fixture.cacheDirectory, currentFile), JSON.stringify({ ...cached, payload: unusable }));
+  assert.equal((await extractDailyTable(fixture.evidence, fixture.path, "source", fixture.config)).status, "COMPLETE");
+  assert.equal(fixture.calls, 2);
+  assert.equal((await extractDailyTable(fixture.evidence, fixture.path, "source", { ...fixture.config, apiKey: "" })).cacheHit, true);
+  assert.equal(fixture.calls, 2);
+});
+
+test("useful partial extractions and explicit withdrawals remain reusable", async (t) => {
+  for (const withdrawal of [false, true]) {
+    await t.test(withdrawal ? "explicit withdrawal" : "partial amount", async (t) => {
+      const partial = payload();
+      partial.rows = [partial.rows[0]!];
+      Object.assign(partial.rows[0]!, { feeRate: null, trackingError: null, return1y: null,
+        distributorLimit: withdrawal ? "未明确" : "10", directLimit: "未明确",
+        withdrawnFields: withdrawal ? ["distributorLimit"] : [],
+      });
+      const fixture = await extractionFixture(t, () => partial);
+      const first = await extractDailyTable(fixture.evidence, fixture.path, "source", fixture.config);
+      assert.equal(first.status, "INCOMPLETE");
+      assert.equal(first.table!.rows.length, 1);
+      const reused = await extractDailyTable(fixture.evidence, fixture.path, "source", { ...fixture.config, apiKey: "" });
+      assert.equal(reused.cacheHit, true);
+      assert.deepEqual(reused.table!.rows, first.table!.rows);
+      assert.deepEqual(reused.withdrawnFields, first.withdrawnFields);
+      assert.equal(fixture.calls, 1);
+    });
+  }
+});
+
+test("cache keys include source update time and only migrate unambiguous legacy entries", async (t) => {
+  let response = payload();
+  const fixture = await extractionFixture(t, () => response);
+  await writeFile(join(fixture.cacheDirectory, `daily-table-${fixture.legacyKey}.json`), JSON.stringify({
+    cacheKey: fixture.legacyKey, payload: response,
+  }));
+  const legacy = await extractDailyTable(fixture.evidence, fixture.path, "source", { ...fixture.config, apiKey: "" });
+  assert.equal(legacy.status, "COMPLETE");
+  assert.equal(legacy.cacheHit, true);
+  assert.equal(fixture.calls, 0);
+  const updated = { ...fixture.evidence, sourceUpdatedAt: "2026-10-22T00:00:00Z", capturedAt: "2026-10-22T01:00:00Z" };
+  response = payload("10/22");
+  const fresh = await extractDailyTable(updated, fixture.path, "source", fixture.config);
+  assert.equal(fresh.cacheHit, false);
+  assert.equal(fresh.table!.dataDate, "2026-10-22");
+  assert.equal(fixture.calls, 1);
+  assert.equal((await extractDailyTable(updated, fixture.path, "source", { ...fixture.config, apiKey: "" })).cacheHit, true);
+  const newer = { ...updated, sourceUpdatedAt: "2026-10-23T00:00:00Z", capturedAt: "2026-10-23T01:00:00Z" };
+  response = payload("10/23");
+  const newest = await extractDailyTable(newer, fixture.path, "source", fixture.config);
+  assert.equal(newest.cacheHit, false);
+  assert.equal(newest.table!.dataDate, "2026-10-23");
+  assert.equal(fixture.calls, 2);
 });
 
 

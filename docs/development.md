@@ -6,10 +6,13 @@
 
 ## 组件开发
 
-当前额度主链路为文件表：在 `collector/` 执行 `npm run build && node dist/src/cli.js table`，输出 `.local/public/latest.json` 与日期文件。`table-watch --interval-minutes 360` 可在持续在线的运行环境低频检查；本轮只验收单轮命令，未部署常驻服务。额度数据不再提交数据库，旧观察API保留兼容；iOS只请求 `/api/v1/table`。
+直接在本人iPhone体验，先按[真机体验指南](iphone-quickstart.md)配置局域网后端和Xcode签名；无需先接通远程推送。
+
+当前额度主链路为文件表：在 `collector/` 执行 `npm run build && node dist/src/cli.js table`，输出 `.local/public/latest.json` 与日期文件。管理端操作使用常驻 `control` 服务，默认每360分钟检查，也支持立即采集。额度数据不再提交数据库，旧观察API保留兼容；iOS只请求 `/api/v1/table`。
 
 - iOS：打开 `ios/Nabao.xcodeproj`；核心解析测试用 `swift test --package-path ios/NabaoCore`。
 - 后端：Java 21，详见 `backend/README.md`。本地 profile 使用文件型数据库，Docker profile 使用 MySQL。
+- 管理端：Node >=22.12，`cd frontend && npm ci && npm test && npm run build`；先构建Vue产物，再打包Java。开发服务器用 `npm run dev`，详见 `frontend/README.md`。
 - 采集器：Node 22，`cd collector && npm ci && npm test`。实时扫描需单独安装浏览器并按组件 README 执行。
 
 macOS 已有 Homebrew Java 21 时，可仅对当前命令设置：
@@ -27,6 +30,26 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 python3 scripts/dev-backend.py start
 python3 scripts/dev-backend.py status
 python3 scripts/dev-backend.py stop
 ```
+
+已有私有JSON运行配置时，使用 `start --env-file /绝对路径/environment.json` 保留该环境的端口、数据库和表路径。文件必须为环境变量名到字符串值的对象，覆盖继承环境和默认`.env`。仅在需要同一局域网真机访问时加 `--lan`，将本次监听地址设为`0.0.0.0`；它不会改写配置文件。再次不带`--lan`启动即可恢复配置中的监听地址。坏配置会在停止现有服务前报错，日志不输出配置值。
+
+### 管理端登录与采集
+
+在 `collector/` 执行 `npm run build` 后，从根目录启动稳定的编译副本：
+
+```sh
+python3 scripts/dev-collector.py start --env-file /绝对路径/environment.json
+python3 scripts/dev-collector.py status
+python3 scripts/dev-collector.py stop
+```
+
+Node不在PATH时给start增加 `--node /绝对路径/node`。脚本复用配置文件中的 `INTERNAL_API_KEY` 作为控制服务鉴权密钥，不输出密钥；仍从 `collector/.env` 读取模型与项目专用浏览器配置。默认控制地址为 `127.0.0.1:18082`，Java的 `NABAO_CONTROL_URL` 与之对应。有采集或登录任务时，启动脚本拒绝替换正在运行的服务。
+
+本机需要看到小红书登录窗口时，在私有环境中设置 `NABAO_LOGIN_HEADLESS=false`，重启采集服务。此项只影响管理端登录；采集与会话检查仍由 `NABAO_CONTROL_HEADLESS` 决定。登录优先复用项目专用profile，失败或取消保留旧会话。可见窗口尚未识别到二维码时会保留窗口，并在管理端展示页面预览；在该窗口完成正常登录后点击“已完成登录”。确认前不会保存新会话，10分钟后超时关闭。受限后只有实际确认已登录才恢复定时采集；管理端显示最近一次检查结果，平台错误截图按需展开。
+
+打开后端 `/admin/index.html` 并输入管理密钥连接。先检查采集账号状态；失效时点击登录，在页面显示的二维码上用本人小红书App扫码，完成验证后点“已完成登录”。遇到小红书安全限制会显示“访问受限”，停止当前登录并暂停当前进程的定时检查；本人处理平台提示后再手动检查或登录，不自动绕过验证。会话保存在运行采集器的机器上，有效期间会复用；平台使其失效后需重新登录，不保证固定有效天数。采集账号是你自己的账号，无需登录各作者账号。作者管理区可填昵称和完整主页链接新增，也可确认移除；配置重启后保留，下一轮采集使用新名单。至少保留两位作者才能采集。
+
+“刷新结果”只读当前结果；“立即采集”访问当前配置作者、抽取并投票，页面显示任务状态，完成后自动刷新。关闭管理页不停止服务器任务；Mac休眠或服务停止期间不采集。最新表日期以来源原图为准。
 
 ## 本地远程通知联调
 
@@ -49,14 +72,13 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 python3 scripts/push-smoke.py
 
 ```sh
 docker compose config --quiet
-docker compose up --build -d mysql backend
-docker compose --profile tools run --rm collector doctor
-docker compose --profile tools run --rm collector table
+docker compose up --build -d
+docker compose exec collector node dist/src/cli.js doctor
 ```
 
 服务默认只监听主机的 `127.0.0.1:8080`。数据库不发布主机端口。真实 iPhone 联调时单独配置可访问的后端地址；生产应通过 HTTPS 入口访问。
 
-采集器的 table 是一次性、有范围上限的执行。目标环境单轮验证通过后，可运行 table-watch --interval-minutes 360。公开表文件通过 public-data 卷写入，后端只读挂载；私有会话和原始证据放 collector-data，不对iOS提供。服务器环境仍需验证网络、登录会话和稳定性。
+Compose默认运行常驻control，控制端口不发布到主机，登录和采集由管理端操作。公开表文件通过public-data卷写入，后端只读挂载；私有会话和原始证据放collector-data，不对iOS提供。`table`仍可用于一次性、有范围上限的诊断，与control共用数据目录锁。服务器环境仍需验证网络、登录会话和稳定性。
 
 ### 后续启用 Apple 推送
 

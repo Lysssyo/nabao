@@ -6,8 +6,9 @@ const object = (value: unknown): ObjectValue | null =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as ObjectValue : null;
 
-// The page embeds JSON with bare undefined values. Only replace tokens outside
-// JSON strings; JSON.parse rejects calls, expressions, comments and other JS.
+// The page embeds JSON with bare undefined values and an unrelated empty Map.
+// Normalize only these exact inert literals outside strings; JSON.parse still
+// rejects nonempty constructors, calls, expressions, comments and other JS.
 function parseState(source: string): unknown {
   let normalized = "";
   let quoted = false;
@@ -27,6 +28,11 @@ function parseState(source: string): unknown {
       && !/[\w$]/.test(source[index + 9] ?? "")) {
       normalized += "null";
       index += 8;
+    } else if (source.startsWith("new Map([])", index)
+      && !/[\w$]/.test(source[index - 1] ?? "")
+      && !/[\w$]/.test(source[index + 11] ?? "")) {
+      normalized += "null";
+      index += 10;
     } else {
       normalized += character;
     }
@@ -52,14 +58,18 @@ function imageUrl(value: unknown): string | null {
     image.url,
     ...variants.filter((item) => item.imageScene === "WB_DFT").map((item) => item.url),
   ];
+  const urls: string[] = [];
   for (const candidate of candidates) {
     if (typeof candidate !== "string") continue;
     try {
       const url = new URL(candidate);
-      if (["https:", "http:"].includes(url.protocol)) return candidate;
+      if (url.protocol === "https:") return candidate;
+      if (url.protocol === "http:") urls.push(candidate);
     } catch { /* Missing or malformed image URLs must remain missing. */ }
   }
-  return null;
+  // An explicitly supplied HTTPS full-size variant is usable immediately;
+  // keep HTTP only as a hint for an exact, observed rendered HTTPS upgrade.
+  return urls[0] ?? null;
 }
 
 /**
@@ -116,6 +126,28 @@ export function mergeNotePage(dom: RawNotePage, structured: RawNotePage | null):
       && item.url.replace(/^https:/, "") === candidate.url.replace(/^https?:/, ""));
     return secure ? { ...candidate, url: secure.url } : candidate;
   });
+  // Static image lists can declare a slide before its URL is populated. A
+  // rendered slide with an explicit index can complete that same slot, but an
+  // unindexed image or a contradictory slide must not be assigned by position.
+  const normalizedText = (value: string) => value.normalize("NFC").replace(/\s+/g, "");
+  const canCompleteSlots = dom.authorIds.length > 0
+    && dom.authorIds.every((authorId) => structured.authorIds.includes(authorId))
+    && dom.expectedImageCount !== null && dom.expectedImageCount === structured.expectedImageCount
+    && normalizedText(dom.body) !== "" && normalizedText(dom.body) === normalizedText(structured.body)
+    && (!dom.title || !structured.title || normalizedText(dom.title) === normalizedText(structured.title));
+  const occupied = new Set(imageCandidates.map((candidate) => candidate.ordinal));
+  const missing = new Map<number, { url: string; ordinal: number }[]>();
+  for (const candidate of canCompleteSlots ? dom.imageCandidates : []) {
+    const ordinal = candidate.ordinal;
+    if (!Number.isSafeInteger(ordinal) || ordinal === null || ordinal < 0
+      || structured.expectedImageCount === null || ordinal >= structured.expectedImageCount
+      || occupied.has(ordinal) || !candidate.url.startsWith("https://")) continue;
+    missing.set(ordinal, [...(missing.get(ordinal) ?? []), { url: candidate.url, ordinal }]);
+  }
+  for (const candidates of missing.values()) {
+    if (new Set(candidates.map((candidate) => candidate.url)).size === 1) imageCandidates.push(candidates[0]!);
+  }
+  imageCandidates.sort((left, right) => left.ordinal! - right.ordinal!);
   return {
     ...structured,
     title: structured.title || dom.title,

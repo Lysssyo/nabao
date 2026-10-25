@@ -57,7 +57,7 @@ export function readNotePage(doc: Document = document): RawNotePage {
   });
 
   let expectedImageCount: number | null = null;
-  const counter = textOf(".slider-container .fraction, .media-container .swiper-pagination-fraction, .note-slider .count");
+  const counter = textOf(".slider-container .fraction, .media-container .xhs-slider-container .fraction, .media-container .swiper-pagination-fraction, .note-slider .count");
   const countMatch = counter.match(/\d+\s*\/\s*(\d+)/);
   if (countMatch?.[1]) expectedImageCount = Number(countMatch[1]);
   const bullets = scope.querySelectorAll(".media-container .swiper-pagination-bullet, .note-slider .swiper-pagination-bullet").length;
@@ -78,7 +78,12 @@ export function readNotePage(doc: Document = document): RawNotePage {
   };
   let sourcePublishedAt = meta(["article:published_time", "datePublished"]);
   let sourceUpdatedAt = meta(["article:modified_time", "dateModified"]);
-  for (const element of doc.querySelectorAll('script[type="application/ld+json"]')) {
+  // On observed XHS pages, JSON-LD Article dates describe the render time.
+  // When note state is present, only its identity-bound time fields qualify;
+  // unsupported state must remain unverified instead of falling back to JSON-LD.
+  const hasInitialState = Array.from(doc.querySelectorAll("script"))
+    .some((element) => /^\s*window\.__INITIAL_STATE__\s*=/.test(element.textContent ?? ""));
+  for (const element of hasInitialState ? [] : doc.querySelectorAll('script[type="application/ld+json"]')) {
     try {
       const value: unknown = JSON.parse(element.textContent ?? "");
       const records = Array.isArray(value) ? value : [value];

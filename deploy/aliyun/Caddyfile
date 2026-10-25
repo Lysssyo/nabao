@@ -1,0 +1,10 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+
+{$NABAO_DOMAIN} {
+    encode zstd gzip
+    header -Server
+    reverse_proxy backend:8080
+}

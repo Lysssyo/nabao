@@ -1,0 +1,34 @@
+# Apply after compose.yml AND compose.production.yml once DNS is ready.
+services:
+  backend:
+    ports: !reset []
+
+  caddy:
+    image: ${NABAO_CADDY_IMAGE:-caddy:2-alpine}
+    environment:
+      NABAO_DOMAIN: ${NABAO_DOMAIN:?Set a public DNS hostname in the production env file}
+      ACME_EMAIL: ${ACME_EMAIL:?Set an ACME account contact in the production env file}
+      GOMEMLIMIT: "48MiB"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Relative paths resolve against the FIRST Compose file: repository root.
+      - ./deploy/aliyun/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: ${CADDY_MEMORY_LIMIT:-64m}
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

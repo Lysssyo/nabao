@@ -1,0 +1,84 @@
+# Apply after the repository compose.yml. Docker Compose >= 2.24.4 is required.
+# This small-host profile is a starting budget, not a guarantee that Chromium fits.
+x-log-limits: &log-limits
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    command:
+      - --innodb-buffer-pool-size=64M
+      - --max-connections=20
+      - --performance-schema=OFF
+      - --table-open-cache=200
+      - --thread-cache-size=4
+      - --tmp-table-size=8M
+      - --max-heap-table-size=8M
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-384m}
+    pids_limit: 128
+    logging: *log-limits
+    stop_grace_period: 45s
+
+  backend:
+    image: ${NABAO_BACKEND_IMAGE:?Set a verified backend image in the production env file}
+    # Override, rather than append to, any base host binding. Before HTTPS is
+    # configured, administrators can reach this through an SSH local forward.
+    ports: !override
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    environment:
+      JAVA_TOOL_OPTIONS: ${NABAO_JAVA_OPTIONS:--Xms64m -Xmx192m -XX:+ExitOnOutOfMemoryError}
+      SERVER_TOMCAT_THREADS_MAX: "40"
+      SERVER_TOMCAT_THREADS_MIN_SPARE: "4"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "1"
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-448m}
+    pids_limit: 192
+    healthcheck:
+      # The Temurin Ubuntu runtime includes bash; this avoids adding curl to the image.
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf 'GET /api/v1/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          IFS= read -r status <&3;
+          [[ "$$status" == *" 200 "* ]]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    logging: *log-limits
+    stop_grace_period: 30s
+
+  collector:
+    image: ${NABAO_COLLECTOR_IMAGE:?Set a verified collector image in the production env file}
+    environment:
+      NABAO_CONTROL_SCHEDULE_ENABLED: ${NABAO_CONTROL_SCHEDULE_ENABLED:-false}
+      NABAO_CONTROL_HEADLESS: "true"
+      NABAO_LOGIN_HEADLESS: "true"
+      NODE_OPTIONS: ${NABAO_NODE_OPTIONS:---max-old-space-size=256}
+    mem_limit: ${COLLECTOR_MEMORY_LIMIT:-768m}
+    pids_limit: 512
+    shm_size: 256m
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:18082/status',
+          {headers:{'X-Internal-Key':process.env.NABAO_CONTROL_KEY},signal:AbortSignal.timeout(4000)})
+          .then(async r=>{if(!r.ok||(await r.json()).available!==true)process.exit(1)})
+          .catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *log-limits
+    stop_grace_period: 30s

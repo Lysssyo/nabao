@@ -9,6 +9,8 @@ import { login, exportSession } from "./browser-session.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { updateDailyTable, dailyTableFromReport } from "./daily-table-run.js";
 import { runTableWatch, tableRunSucceeded } from "./table-watch.js";
+import { serveCollectorControl } from "./control-server.js";
+import { loadAuthorConfig, withAuthorLease } from "./author-store.js";
 
 await loadLocalEnvironment();
 process.env.NABAO_TABLE_CACHE_DIR ??= resolve(process.env.NABAO_DATA_DIR ?? "data", "table-cache");
@@ -22,7 +24,9 @@ function option(name: string): string | undefined {
 }
 
 try {
-  if (command === "login") {
+  if (command === "control") {
+    await serveCollectorControl();
+  } else if (command === "login") {
     await login();
   } else if (command === "session-export") {
     await exportSession();
@@ -38,12 +42,24 @@ try {
       const outputDirectory = process.env.NABAO_TABLE_DIRECTORY ?? "../.local/public";
       const dataDirectory = process.env.NABAO_DATA_DIR ?? "data";
       const savedReport = option("--report");
+      const replayDate = option("--date");
+      if (replayDate && (command !== "table" || !savedReport)) throw new Error("--date requires a single table --report replay.");
+      if (replayDate && (!/^\d{4}-\d{2}-\d{2}$/.test(replayDate)
+        || !Number.isFinite(Date.parse(`${replayDate}T00:00:00Z`))
+        || new Date(`${replayDate}T00:00:00Z`).toISOString().slice(0, 10) !== replayDate)) throw new Error("TABLE_RUN_DATE_INVALID");
       const last = await runTableWatch({
-        run: () => savedReport ? dailyTableFromReport(resolve(savedReport), resolve(outputDirectory))
+        run: () => savedReport ? dailyTableFromReport(resolve(savedReport), resolve(outputDirectory), {
+          ...(replayDate ? { dataDate: replayDate } : {}),
+          dataDirectory,
+          stateDirectory: process.env.NABAO_TABLE_STATE_DIR?.trim() || resolve(dataDirectory, "table-state"),
+        })
           : updateDailyTable({ maxNotes: Number(option("--max-notes") ?? "6"), headless: !args.includes("--headed"),
             dataDirectory, outputDirectory }),
         statusFile: resolve(dataDirectory, "table-watch", "status.json"),
+        managementFiles: { statusFile: resolve(process.env.NABAO_STATUS_FILE?.trim() || resolve(outputDirectory, "..", "status", "daily-table.json")),
+          tableFile: resolve(outputDirectory, "latest.json") },
         intervalMs: intervalMinutes * 60_000, signal: stop.signal, once: command === "table",
+        managementAuthors: async () => (await loadAuthorConfig(dataDirectory)).authors,
         onResult: (result) => console.log(JSON.stringify(result, null, 2)),
         onAlert: (status) => console.error(JSON.stringify({ event: "TABLE_COLLECTION_ATTENTION", ...status })),
       });
@@ -82,16 +98,17 @@ try {
     const file = option("--capture");
     if (!file) throw new Error("process requires --capture path/to/capture.json.");
     const capture = JSON.parse(await readFile(file, "utf8")) as NoteCapture;
-    const result = await processCapture(capture, dirname(resolve(file)), resolve(process.env.NABAO_DATA_DIR ?? "data"));
+    const dataDirectory = resolve(process.env.NABAO_DATA_DIR ?? "data");
+    const result = await withAuthorLease(dataDirectory, lease => processCapture(capture, dirname(resolve(file)), dataDirectory, lease.config.authors));
     console.log(JSON.stringify(result, null, 2));
     process.exitCode = result.status === "published" ? 0 : 2;
   } else if (command === "submit") {
     const file = option("--file");
     if (!file) throw new Error("submit requires --file with a manually reviewed observation batch. This is a diagnostic command, not the daily workflow.");
     const input: unknown = JSON.parse(await readFile(file, "utf8"));
-    console.log(JSON.stringify(await submitReviewed(input), null, 2));
+    console.log(JSON.stringify(await withAuthorLease(resolve(process.env.NABAO_DATA_DIR ?? "data"), lease => submitReviewed(input, lease.config.authors)), null, 2));
   } else {
-    console.log("Usage: doctor | login | session-export | table [--max-notes 1..20] [--headed] [--report report.json] | table-watch [--interval-minutes 360] | scan [--source ID] [--max-notes 1..20] [--headed] [--known-notes] | watch [--interval-minutes 360] | process --capture path/capture.json | submit --file path.json");
+    console.log("Usage: control | doctor | login | session-export | table [--max-notes 1..20] [--headed] [--report report.json [--date YYYY-MM-DD]] | table-watch [--interval-minutes 360] | scan [--source ID] [--max-notes 1..20] [--headed] [--known-notes] | watch [--interval-minutes 360] | process --capture path/capture.json | submit --file path.json");
     process.exitCode = command ? 1 : 0;
   }
 } catch (error) {

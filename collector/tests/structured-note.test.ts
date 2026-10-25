@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { parseHTML } from "linkedom";
+import { readNotePage } from "../src/dom.js";
 import { mergeNotePage, readStructuredNote } from "../src/structured-note.js";
 import { captureIssues } from "../src/rules.js";
 
@@ -28,6 +30,46 @@ test("static state preserves strings containing undefined and explicit epoch mil
   assert.deepEqual(raw.authorIds, [authorId]);
   assert.equal(raw.sourcePublishedAt, "2026-10-20T01:00:00.000Z");
   assert.equal(raw.sourceUpdatedAt, "2026-10-20T02:00:00.000Z");
+});
+
+test("an unrelated exact empty Map cannot hide verified note times and the independent image total", async () => {
+  const html = await readFile(new URL("../../tests/fixtures/structured-note-empty-map.html", import.meta.url), "utf8");
+  const structured = readStructuredNote(html, noteId, authorId)!;
+  assert.ok(structured);
+  assert.equal(structured.body, "测试正文保留 new Map([]) 和 undefined 字样。");
+  assert.equal(structured.expectedImageCount, 10);
+  assert.equal(structured.sourcePublishedAt, "2026-10-20T01:00:00.000Z");
+  assert.equal(structured.sourceUpdatedAt, "2026-10-20T02:00:00.000Z");
+  const dom = readNotePage(parseHTML(html).document as unknown as Document);
+  assert.equal(dom.imageCandidates.length, 1);
+  assert.equal(dom.expectedImageCount, 10, "the displayed fraction declares the total independently of mounted slides");
+  assert.equal(dom.sourcePublishedAt, null, "JSON-LD rendering timestamps cannot replace identity-bound source times");
+  assert.equal(dom.sourceUpdatedAt, null);
+  const merged = mergeNotePage(dom, structured);
+  assert.equal(merged.expectedImageCount, 10);
+  assert.equal(merged.sourcePublishedAt, structured.sourcePublishedAt);
+  assert.equal(merged.sourceUpdatedAt, structured.sourceUpdatedAt);
+
+  const noCounter = parseHTML(html).document;
+  noCounter.querySelector(".fraction")!.remove();
+  assert.equal(readNotePage(noCounter as unknown as Document).expectedImageCount, null);
+});
+
+test("nonempty Map expressions remain rejected and never fall back to render timestamps", async () => {
+  const html = await readFile(new URL("../../tests/fixtures/structured-note-empty-map.html", import.meta.url), "utf8");
+  const marker = "__nabaoMapExecuted";
+  const malicious = html.replace('"noteDetailMap":new Map([])',
+    `"noteDetailMap":new Map([(() => { globalThis.${marker} = true; return []; })()])`);
+  assert.equal(readStructuredNote(malicious, noteId, authorId), null);
+  assert.equal(Reflect.has(globalThis, marker), false);
+  const dom = readNotePage(parseHTML(malicious).document as unknown as Document);
+  const merged = mergeNotePage(dom, null);
+  assert.equal(merged.expectedImageCount, 10);
+  assert.equal(merged.sourcePublishedAt, null);
+  assert.equal(merged.sourceUpdatedAt, null);
+  assert.ok(captureIssues(merged, authorId, []).includes("PUBLICATION_TIME_UNVERIFIED"));
+  assert.equal(readStructuredNote(html.replace('"noteDetailMap":new Map([])',
+    '"noteDetailMap":new Map([]).set("value",1)'), noteId, authorId), null);
 });
 
 test("a missing image URL preserves the total and original indices", async () => {
@@ -118,4 +160,48 @@ test("an observed HTTPS rendering upgrades the exact static image without changi
   const merged = mergeNotePage(dom, raw);
   assert.deepEqual(merged.imageCandidates, [dom.imageCandidates[0]]);
   assert.equal(merged.expectedImageCount, 1);
+});
+
+test("an explicit secure full-size variant is preferred over an insecure default or a preview", () => {
+  const raw = readStructuredNote(page({ imageList: [{
+    urlDefault: "http://test.xhscdn.com/default.webp",
+    infoList: [
+      { imageScene: "WB_PRV", url: "https://test.xhscdn.com/thumbnail.webp" },
+      { imageScene: "WB_DFT", url: "https://test.xhscdn.com/full.webp" },
+    ],
+  }] }), noteId, authorId)!;
+  assert.deepEqual(raw.imageCandidates, [{ url: "https://test.xhscdn.com/full.webp", ordinal: 0 }]);
+});
+
+test("rendered images fill missing structured slots only at their explicit original indices", () => {
+  const raw = readStructuredNote(page({ imageList: [
+    { urlDefault: "https://test.xhscdn.com/first.webp" },
+    {},
+    { urlDefault: "https://test.xhscdn.com/third.webp" },
+  ] }), noteId, authorId)!;
+  const second = { url: "https://test.xhscdn.com/second.webp", ordinal: 1 };
+  const dom = { ...raw, imageCandidates: [
+    { url: "https://test.xhscdn.com/unindexed.webp", ordinal: null },
+    { url: "https://test.xhscdn.com/outside.webp", ordinal: 3 },
+    second,
+  ] };
+  const merged = mergeNotePage(dom, raw);
+  assert.equal(merged.expectedImageCount, 3);
+  assert.deepEqual(merged.imageCandidates, [raw.imageCandidates[0], second, raw.imageCandidates[1]]);
+  assert.deepEqual(mergeNotePage({ ...dom, imageCandidates: dom.imageCandidates.slice(0, 2) }, raw).imageCandidates,
+    raw.imageCandidates, "unindexed or out-of-range images cannot repair a missing slot");
+  assert.deepEqual(mergeNotePage({ ...dom, imageCandidates: [second,
+    { url: "https://test.xhscdn.com/different.webp", ordinal: 1 },
+  ] }, raw).imageCandidates, raw.imageCandidates, "conflicting rendered images cannot silently choose one slot");
+  for (const uncertain of [
+    { ...dom, authorIds: [] },
+    { ...dom, authorIds: [authorId, "other-author"] },
+    { ...dom, expectedImageCount: null },
+    { ...dom, expectedImageCount: 4 },
+    { ...dom, body: "另一篇笔记正文" },
+    { ...dom, title: "另一篇标题" },
+  ]) {
+    assert.deepEqual(mergeNotePage(uncertain, raw).imageCandidates, raw.imageCandidates,
+      "new images require matching author, content and an independently declared total");
+  }
 });

@@ -36,10 +36,15 @@ services:
       APNS_PRIVATE_KEY_PATH: ${APNS_PRIVATE_KEY_PATH:-}
       APNS_POLL_DELAY_MS: ${APNS_POLL_DELAY_MS:-60000}
       NABAO_TABLE_FILE: /app/public/latest.json
+      NABAO_STATUS_FILE: /app/status/daily-table.json
+      NABAO_CONTROL_URL: http://collector:18082
+      NABAO_CONTROL_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
+      NABAO_STATUS_STALE_SECONDS: ${NABAO_STATUS_STALE_SECONDS:-43200}
       NABAO_PUSH_DATA_SOURCE: table
       NABAO_PUSH_STATE_FILE: /app/push/table-state.json
     volumes:
       - public-data:/app/public:ro
+      - status-data:/app/status:ro
       - push-data:/app/push
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
@@ -52,7 +57,6 @@ services:
     image: ${NABAO_COLLECTOR_IMAGE:-nabao-collector:local}
     build:
       context: ./collector
-    profiles: ["tools"]
     environment:
       NABAO_DATA_DIR: /app/data
       NABAO_BACKEND_URL: http://backend:8080
@@ -63,22 +67,31 @@ services:
       NABAO_LLM_MAX_TOKENS: ${NABAO_LLM_MAX_TOKENS:-32768}
       NABAO_LLM_TIMEOUT_MS: ${NABAO_LLM_TIMEOUT_MS:-180000}
       NABAO_LLM_THINKING_DISABLED: ${NABAO_LLM_THINKING_DISABLED:-true}
-      # Optional private storage-state file provisioned into collector-data.
-      NABAO_BROWSER_STORAGE_STATE: ${NABAO_BROWSER_STORAGE_STATE:-}
+      NABAO_BROWSER_PROFILE: /app/data/browser-profile
+      NABAO_BROWSER_STORAGE_STATE: /app/data/browser-session.json
+      NABAO_CONTROL_HOST: 0.0.0.0
+      NABAO_CONTROL_PORT: 18082
+      NABAO_CONTROL_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
+      NABAO_CONTROL_SCHEDULE_ENABLED: ${NABAO_CONTROL_SCHEDULE_ENABLED:-true}
+      NABAO_CONTROL_INTERVAL_MINUTES: ${NABAO_CONTROL_INTERVAL_MINUTES:-360}
       NABAO_TABLE_DIRECTORY: /app/public
+      NABAO_STATUS_FILE: /app/status/daily-table.json
     volumes:
       - collector-data:/app/data
       - public-data:/app/public
+      - status-data:/app/status
     init: true
     shm_size: 1gb
     depends_on:
       backend:
         condition: service_started
-    # One bounded scan by default. Override with watch after validating this host's access.
-    command: ["table"]
+    # The control port stays on the private Compose network; only the authenticated backend proxies it.
+    command: ["control"]
+    restart: unless-stopped
 
 volumes:
   mysql-data:
   collector-data:
   public-data:
   push-data:
+  status-data:

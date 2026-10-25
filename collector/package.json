@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
+    "control": "npm run build && node dist/src/cli.js control",
     "doctor": "npm run build && node dist/src/cli.js doctor",
     "scan": "npm run build && node dist/src/cli.js scan",
     "submit": "npm run build && node dist/src/cli.js submit",
