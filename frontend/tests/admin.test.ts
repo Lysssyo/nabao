@@ -311,13 +311,14 @@ test('authors can be added and removed without starting collection or changing t
   expect(fetcher.mock.calls.filter(([path]) => String(path).endsWith('table-status'))).toHaveLength(1);
 });
 
-test.each([0, 1])('%i configured authors still allow maintenance but require two before collection', async count => {
+test.each([0, 1])('%i configured authors allow maintenance; a single author can collect', async count => {
   let state = { ...collector(), sources: AUTHORS.slice(0, count) };
   const { wrapper, connect, fetcher } = page(async (path, init) => {
     if (init.method === 'DELETE') { state = { ...state, sources: [] }; return json(state); }
     return json(path.endsWith('table-status') ? table() : state);
   }); await connect();
-  expect(wrapper.text()).toContain('至少添加两位作者才能采集'); expect(wrapper.get('.collect-button').attributes('disabled')).toBeDefined();
+  if (!count) { expect(wrapper.text()).toContain('至少添加一位作者才能采集'); expect(wrapper.get('.collect-button').attributes('disabled')).toBeDefined(); }
+  else expect(wrapper.get('.collect-button').attributes('disabled')).toBeUndefined();
   expect(wrapper.get('.author-form fieldset').attributes('disabled')).toBeUndefined();
   if (count) {
     await wrapper.get('.author-row button').trigger('click'); await button(wrapper, '确认移除').trigger('click'); await flushPromises();

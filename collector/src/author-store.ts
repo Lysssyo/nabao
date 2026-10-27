@@ -99,7 +99,7 @@ export async function loadAuthorConfig(dataDirectory: string): Promise<AuthorCon
   }
 }
 export function requireVotingAuthors(config: AuthorConfig): void {
-  if (config.authors.length < 2) throw new AuthorConfigError("AUTHORS_REQUIRED");
+  if (config.authors.length < 1) throw new AuthorConfigError("AUTHORS_REQUIRED");
 }
 export async function addAuthor(dataDirectory: string, input: unknown): Promise<AuthorConfig> {
   const author = parseAuthor(input);

@@ -1,3 +1,4 @@
+import { createVoteAudit, saveVoteAudit, flushVoteAudits, VOTE_RULE } from "./vote-audit.js";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -13,13 +14,14 @@ import { DAILY_TABLE_PROMPT_VERSION, extractDailyTable, hasReusableDailyTableCon
 import { voteDailyTables, type SourceTable } from "./daily-table-voting.js";
 import type { NoteCapture } from "./types.js";
 import { validateCaptureEvidence } from "./extract.js";
+import { retainUnitContexts } from "./evidence-context.js";
 
 // Kept for callers importing the former source identifier. All configured authors now vote equally.
 export const PRIMARY_TABLE_AUTHOR = "5ddec93c0000000001009aa1";
 // Source-name reviews affect which rows are admissible. Revalidate cached raw
 // transcriptions when those reviews change instead of freezing an old subset.
-const VALIDATION_VERSION = `daily-source-validation-v4:${createHash("sha256")
-  .update(JSON.stringify({ catalog: DAILY_FUND_CATALOG, aliases: DAILY_FUND_SOURCE_ALIASES })).digest("hex")}`;
+const VALIDATION_VERSION = `daily-source-validation-v5:${createHash("sha256")
+  .update(JSON.stringify({ prompt: DAILY_TABLE_PROMPT_VERSION, catalog: DAILY_FUND_CATALOG, aliases: DAILY_FUND_SOURCE_ALIASES })).digest("hex")}`;
 export type DailyTableRunStatus = "published" | "unchanged" | "older_skipped" | "partial" | "no_new_post" | "restricted" | "session_expired" | "failed";
 export const DAILY_TABLE_ERROR_CODES = ["TABLE_NO_TODAY_POST", "TABLE_ACCESS_RESTRICTED", "TABLE_SESSION_EXPIRED", "TABLE_PARTIAL_FIELDS",
   "TABLE_EXTRACTION_FAILED", "TABLE_NO_QUORUM", "TABLE_OLDER_RUN_SKIPPED"] as const;
@@ -56,9 +58,9 @@ function quotaTopic(note: NoteCapture): boolean {
 export async function dailyTableFromReport(reportFile: string, outputDirectory: string, options: RunOptions = {}) {
   const dataDirectory = resolve(options.dataDirectory?.trim() || process.env.NABAO_DATA_DIR?.trim()
     || (options.stateDirectory?.trim() ? dirname(resolve(options.stateDirectory)) : dirname(resolve(outputDirectory))));
-  return withAuthorLease(dataDirectory, lease => dailyTableFromReportWithAuthors(reportFile, outputDirectory, options, lease), options.authorLease);
+  return withAuthorLease(dataDirectory, lease => dailyTableFromReportWithAuthors(reportFile, outputDirectory, options, lease, dataDirectory), options.authorLease);
 }
-async function dailyTableFromReportWithAuthors(reportFile: string, outputDirectory: string, options: RunOptions, lease: AuthorLease) {
+async function dailyTableFromReportWithAuthors(reportFile: string, outputDirectory: string, options: RunOptions, lease: AuthorLease, dataDirectory: string) {
   requireVotingAuthors(lease.config);
   const sources = lease.config.authors;
   const report = JSON.parse(await readFile(reportFile, "utf8")) as CaptureReport;
@@ -78,6 +80,7 @@ async function dailyTableFromReportWithAuthors(reportFile: string, outputDirecto
     const allowedAuthors = new Set(sources.map((source) => source.id));
     const observations = new Map(saved.filter((input) => input.table.dataDate === dataDate && allowedAuthors.has(input.authorId))
       .map((input) => [`${input.authorId}:${input.capture.noteId}`, input]));
+    const auditInputs = new Map(observations);
     const extract = options.extract ?? extractDailyTable;
     for (const source of sources) {
       const candidates = (report.results.find((item) => item.authorId === source.id)?.notes ?? [])
@@ -119,11 +122,14 @@ async function dailyTableFromReportWithAuthors(reportFile: string, outputDirecto
           // Exception messages may contain credentials or signed URLs; keep a stable code only.
           result = { status: "FAILED", table: null, issues: ["TABLE_EXTRACTION_EXCEPTION"], promptVersion: DAILY_TABLE_PROMPT_VERSION };
         }
+        result.unitContexts = retainUnitContexts(previous, note, result);
         const useful = hasReusableDailyTableContent(result.table, PRIMARY_DAILY_FUND_CODES, result.withdrawnFields);
         const unusableToday = result.table?.dataDate === dataDate && !useful;
         attempts.push({ authorId: source.id, noteId: note.noteId, title: note.title, publishedAt: note.sourcePublishedAt,
           updatedAt: note.sourceUpdatedAt, status: unusableToday ? "FAILED" : result.status, dataDate: result.table?.dataDate, rows: result.table?.rows.length ?? 0,
           issues: unusableToday ? [...result.issues, "TABLE_NO_USABLE_FIELDS"] : result.issues, cacheHit: result.cacheHit ?? false });
+        if (result.table) auditInputs.set(key, { authorId: source.id, capture: note, table: result.table,
+          withdrawnFields: result.withdrawnFields, unitContexts: result.unitContexts });
         if (result.table && result.table.dataDate === dataDate) {
           observations.set(key, { authorId: source.id, capture: note, table: result.table, withdrawnFields: result.withdrawnFields,
             unitContexts: result.unitContexts, ...(useful ? { validationVersion: VALIDATION_VERSION,
@@ -140,6 +146,8 @@ async function dailyTableFromReportWithAuthors(reportFile: string, outputDirecto
     voted.publication.authorConfig = { revision: lease.config.revision, authorIds: sources.map(source => source.id) };
     voted.publication.revision = createHash("sha256").update(JSON.stringify({ vote: voted.publication.revision, authorConfig: voted.publication.authorConfig })).digest("hex");
     await savePrivate(statePath, inputs);
+    const audit = createVoteAudit([...auditInputs.values()], voted.decisions, sources, dataDate, voted.publication.revision, "PENDING_PUBLICATION");
+    await saveVoteAudit(dataDirectory, audit);
     const publication = voted.table ? await publishDailyTable(voted.table, outputDirectory, PRIMARY_DAILY_FUND_CODES, voted.publication) : null;
     const latest = await readOptional<DailyTable>(join(outputDirectory, "latest.json"));
     const captureIssues = sources.map((source) => {
@@ -167,7 +175,11 @@ async function dailyTableFromReportWithAuthors(reportFile: string, outputDirecto
     else { status = "no_new_post"; errorCode = "TABLE_NO_TODAY_POST"; }
     const result = { status, errorCode, dataDate: latest?.dataDate ?? null, attemptedDate: dataDate, rowCount: latest?.rows.length ?? 0,
       adoptedFields: voted.adoptedFields, pendingFields: voted.pendingFields, publication, attempts,
-      voting: { rule: "UNIQUE_PLURALITY_MIN_TWO_AUTHORS_PER_FIELD", revision: voted.publication.revision, decisions: voted.decisions }, captureIssues };
+      voting: { rule: VOTE_RULE, revision: voted.publication.revision, decisions: voted.decisions }, captureIssues };
+    audit.publicationStatus = publication?.status ?? "NOT_PUBLISHED";
+    await saveVoteAudit(dataDirectory, audit);
+    await flushVoteAudits(dataDirectory);
+    Object.assign(result, { audit: { batchId: audit.id } });
     const resultFile = join(root, "daily-table-report.json");
     await writeJson(resultFile, result);
     return { status, errorCode, dataDate: result.dataDate, attemptedDate: dataDate, rowCount: result.rowCount,

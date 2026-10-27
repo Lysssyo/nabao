@@ -56,7 +56,7 @@ function noteParts(notes: string[]): string[] {
 
 /** Footnotes are part of the value's meaning, never decoration that may be stripped for a match. */
 function fieldMeaning(value: string, field: VotedField, table: DailyTable, fundCode: string, fundName: string,
-  unitContext?: CellUnitContext): { key: string; notes: string[]; value: string } | null {
+  unitContext?: CellUnitContext, onReject?: (reason: string) => void): { key: string; notes: string[]; value: string } | null {
   const text = normalize(value).replace(/(?:保持不变|维持不变|不变)$/, "").replace(/^(?:仍为|维持)/, "");
   if (!text || /^(?:未明确|待更新|未知|不详|暂无(?:数据|信息)?|无数据|待确认|待核实|未公布|未提供|未标注|未注明|缺失|看不清|[-—–‐‑‒―−_]+|N\/A)$/i.test(text)) return null;
   const parts = noteParts(table.notes).filter((note) => {
@@ -91,16 +91,20 @@ function fieldMeaning(value: string, field: VotedField, table: DailyTable, fundC
     if (numeric) {
       const currency = /美元|USD/.test(parts.join(" ")) ? "UNSPECIFIED" : /元/.test(text) || unitNotes.length || cellDaily ? "CNY" : "UNSPECIFIED";
       const period = explicitDaily || unitNotes.length || cellDaily ? "DAILY" : "UNSPECIFIED";
+      // A bare number cannot oppose a daily CNY limit, or be published as one.
+      if (currency !== "CNY" || period !== "DAILY") { onReject?.("缺少明确的币种或额度周期，未计票"); return null; }
       const number = Number(numeric[1]);
       if (!Number.isFinite(number)) return null;
       const notes = [...meaningNotes, ...(period === "DAILY" ? ["额度单位：元/日"] : []), ...(cellDaily ? [unitContext!.text] : [])];
       return { key: JSON.stringify(["AMOUNT", number, currency, period, qualifications]), notes,
         value: `${number}${numeric[2]}` };
     }
-    // "无", "暂停", "0", "部分渠道" and merged channel cells remain distinct.
-    return { key: JSON.stringify(["TEXT", text, qualifications]), notes: meaningNotes, value: value.trim() };
+    // Only exact unqualified purchase-pause synonyms merge. Large-order pauses,
+    // redemption pauses, no distributor and qualified channels remain distinct.
+    const canonical = /^(?:暂停|暂停申购|暂停购买|停止申购|停购)$/.test(text) ? "暂停申购" : text;
+    return { key: JSON.stringify(["TEXT", canonical, qualifications]), notes: meaningNotes, value: canonical };
   }
-  const relevant = parts.filter((note) => /数据(?:截至|截止|日期)/.test(note) || (field === "return1y" ? /收益|近一年|净值/.test(note)
+  const relevant = parts.filter((note) => (field === "return1y" ? /收益|近一年|净值/.test(note)
     : field === "trackingError" ? /误差|跟踪/.test(note) : /费率|费用/.test(note)));
   const dates = relevant.flatMap((note) => [...note.matchAll(/(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})日?/g)]
     .map((match) => `${match[1]}-${match[2]!.padStart(2, "0")}-${match[3]!.padStart(2, "0")}`));
@@ -112,7 +116,10 @@ function fieldMeaning(value: string, field: VotedField, table: DailyTable, fundC
     }
   }
   // A reporting day and an explicit performance cutoff are different scopes, even if their dates happen to match.
-  const cutoffNotes = relevant.filter((note) => /截至|截止|数据日期|净值日期/.test(note));
+  const cutoffNotes = relevant.filter((note) => /截至|截止|数据日期|净值日期|\d{1,2}[-/.月]\d{1,2}日?.{0,8}(?:单位|最新)?净值|(?:单位|最新)?净值.{0,8}\d{1,2}[-/.月]\d{1,2}/.test(note));
+  // The table's reporting day is not a performance cutoff. Keep the raw value
+  // in the audit, but only an explicitly dated return participates in voting.
+  if (field === "return1y" && (!cutoffNotes.length || !dates.length)) { onReject?.("未提供可核对的收益截止日期，未计票"); return null; }
   const dateScope = dates.length ? ["AS_OF_DATE", ...new Set(dates)].sort()
     : cutoffNotes.length ? ["AS_OF_UNRESOLVED", ...cutoffNotes.map(normalize).sort()] : ["AS_REPORTED_ON", table.dataDate];
   const match = /^([+-]?\d+(?:\.\d+)?)%([*†‡]*)$/.exec(text);
@@ -120,6 +127,15 @@ function fieldMeaning(value: string, field: VotedField, table: DailyTable, fundC
   const notes = [...footnotes, ...cutoffNotes];
   return { key: JSON.stringify(["PERCENT", Number(match[1]), dateScope, qualifications]),
     notes, value: `${Number(match[1])}%${match[2]}` };
+}
+
+/** Explain exclusions using the very same parser as voting; never guess a scope in the audit. */
+export function explainUncountedValue(value: string | null, field: VotedField, table: DailyTable, fundCode: string,
+  fundName: string, unitContext?: CellUnitContext): string {
+  if (value === null) return "未提供此字段";
+  let reason = "未形成有效票";
+  fieldMeaning(value, field, table, fundCode, fundName, unitContext, message => { reason = message; });
+  return reason;
 }
 
 function latestVote(a: FieldVote, b: FieldVote): number {
@@ -175,7 +191,7 @@ export function voteDailyTables(inputs: SourceTable[], dataDate: string, allowed
       const ranked = [...groups.values()].sort((a, b) => b.length - a.length);
       const best = ranked[0] ?? [];
       const tied = ranked.length > 1 && ranked[1]!.length === best.length;
-      const adopted = best.length >= 2 && !tied;
+      const adopted = best.length >= 1 && !tied;
       decisions.push({ fundCode, field, status: adopted ? "ADOPTED" : tied ? "TIE" : "INSUFFICIENT",
         value: adopted ? best[0]!.value : null, votes: authorVotes, support: best.length });
       if (adopted) {

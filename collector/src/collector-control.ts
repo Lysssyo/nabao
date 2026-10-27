@@ -1,3 +1,4 @@
+import { flushVoteAudits } from "./vote-audit.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -100,6 +101,7 @@ export class CollectorControl {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new Error("CONTROL_STATE_INVALID");
       }
       await this.persist();
+      await flushVoteAudits(this.options.dataDirectory);
       this.scheduleNext();
     } catch (error) { await this.daemonLock.release(); this.daemonLock = null; throw error; }
   }
@@ -107,7 +109,7 @@ export class CollectorControl {
   status(): ControlStatus {
     return { available: true, busy: this.operation !== null, session: { ...this.session },
       run: this.runState && { ...this.runState }, login: { ...this.login },
-      schedule: { enabled: this.options.scheduleEnabled && !this.accessRestricted && (this.authorConfig?.authors.length ?? 0) >= 2,
+      schedule: { enabled: this.options.scheduleEnabled && !this.accessRestricted && (this.authorConfig?.authors.length ?? 0) >= 1,
         intervalMinutes: this.options.intervalMinutes, nextRunAt: this.nextRunAt },
       sources: (this.authorConfig?.authors ?? []).map(({ id, name, profileUrl }) => ({ id, name, profileUrl })) };
   }
@@ -184,7 +186,7 @@ export class CollectorControl {
     if (code === "AUTHOR_NOT_FOUND") return new ControlError(404, "此作者不在采集列表中。");
     if (code === "AUTHOR_INVALID") return new ControlError(400, "请填写 1–80 字昵称和有效的小红书作者主页链接。");
     if (code === "AUTHOR_LIMIT") return new ControlError(400, "最多可添加 50 位采集作者。");
-    if (code === "AUTHORS_REQUIRED") return new ControlError(409, "至少添加两位作者后才能采集并形成投票结果。");
+    if (code === "AUTHORS_REQUIRED") return new ControlError(409, "至少添加一位作者后才能采集并形成投票结果。");
     return new ControlError(503, "无法读取或保存作者配置，请检查采集服务存储。");
   }
 
@@ -369,7 +371,7 @@ export class CollectorControl {
   private scheduleNext() {
     clearTimeout(this.scheduleTimer);
     this.nextRunAt = null;
-    if (this.closing || !this.options.scheduleEnabled || this.accessRestricted || (this.authorConfig?.authors.length ?? 0) < 2) return;
+    if (this.closing || !this.options.scheduleEnabled || this.accessRestricted || (this.authorConfig?.authors.length ?? 0) < 1) return;
     const interval = this.options.intervalMinutes * 60_000;
     this.nextRunAt = new Date(Date.now() + interval).toISOString();
     this.scheduleTimer = setTimeout(() => {

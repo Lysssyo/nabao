@@ -1,0 +1,10 @@
+# Bootstrap only. After ACME issuance, redirect this server to the HTTPS server.
+server {
+    listen 80;
+    server_name ${NABAO_DOMAIN};
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/nabao-acme;
+        try_files $uri =404;
+    }
+    location / { return 404; }
+}

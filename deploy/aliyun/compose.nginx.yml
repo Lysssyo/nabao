@@ -1,0 +1,7 @@
+# Use with compose.yml + compose.production.yml when the host already runs Nginx.
+# The session JSON is portable across runtimes; Mac browser profiles are not.
+services:
+  collector:
+    environment:
+      NABAO_BROWSER_PROFILE: ""
+      NABAO_BROWSER_STORAGE_STATE: /app/data/browser-session.json

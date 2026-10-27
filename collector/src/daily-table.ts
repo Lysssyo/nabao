@@ -7,7 +7,7 @@ import { acquireProcessLock } from "./process-lock.js";
 import { olderPublication, validPublicationAuthorConfig, type VotePublication, type VotedField, type UnitContexts } from "./daily-table-voting.js";
 import { DAILY_FUND_SOURCE_ALIASES } from "./daily-fund-source-aliases.js";
 
-export const DAILY_TABLE_PROMPT_VERSION = "nasdaq-daily-table-v5";
+export const DAILY_TABLE_PROMPT_VERSION = "nasdaq-daily-table-v6";
 export const DAILY_FUND_CODES = [
   "040046", "014978", "270042", "006479", "021778", "000834", "008971", "016452", "016453", "021000", "022525",
   "019524", "019525", "022664", "019736", "019737", "019547", "019548", "019441", "019442", "539001", "012752",
@@ -54,6 +54,7 @@ export const DAILY_TABLE_PROMPT = `你是纳斯达克基金每日公开表格的
 跨代销和直销两列的合并单元格（例如“部分渠道100”）：mergedLimit写该合并原文，两列写“未明确”，绝不能拆成代销100直销100。普通两列独立的值mergedLimit为null。
 若只提供一篇明确纳指额度变更的短帖，可仅输出该帖明确提及的份额行，不能补成完整表。正文明确“A/C”时分别输出A和C，金额仅应用于明确包含的份额。用户JSON中的trustedFundCatalog是主表提供的名称/代码字典，只可精确匹配相同公司、指数类别和份额；没有明确代码时fundCode返回null，由程序匹配字典。禁止凭模型知识或字典之外的名称补代码。短帖没有表格图片日期时pageDates为[]，以正文/标题原始日期和完整日期句子为依据。
 额度和百分比末尾的脚注符号必须保留，例如10†、100†、100*、12.69%‡，不得去掉。notes逐字转录来源图中与表含义有关的脚注（收益截止日期、额度单位、星号/匕号说明、渠道差异、公告和下单页说明等）；不加入自己解释、免责声明或模型分析，不转录标普或其他表专属脚注。
+表格的“数据截至/更新日期”不是收益或净值截止日，不能改写为“收益截至”。逐一查看同笔记产品附图：如同一基金代码的产品页有“10-23单位净值”“最新净值(10-23)”等原文，在notes中按该代码记录，例如“019441 单位净值（10-23）”；这里只说明记录格式，代码和日期必须来自实际图片。一个代码的净值日期不能套给其他份额或全表。只有原文明确说明共享时才共用截止日；找不到收益截止日时不补日期，也不依据数值相同猜日期。
 费率、近一年、误差仅原文百分比，不计算、不猜测，也不解释成官方指标。费率列若只有0.66等裸数而未标明百分号/百分比单位，用null，不能补%。未出现或看不清用null。额度看不清用“未明确”。若原文明示某基金某字段旧数据作废、撤回、未知或无法确认，在该行新增withdrawnFields数组（字段名限feeRate/distributorLimit/directLimit/trackingError/return1y）；单纯未提及或看不清不等于撤回，withdrawnFields用[]。保留收益、跟踪误差等指标的实际截止日期脚注，不能以发帖日期替代。
 逐行核对同一笔记的产品页、公告等附图，仅补该基金该渠道的额度单位证据，不改变原表金额。该行可新增unitContext：{"directLimit":{"text":"每人每交易日200元","imageOrdinal":5},"distributorLimit":{"text":"单日限购100元","imageOrdinal":9}}。这里仅为结构例子，不是待填数据。imageOrdinal为0起始：用户内容image:1对应0，image:6对应5。text逐字抄录同图明确同时出现单日/每日/每交易日和元的完整额度句；同图需可确认该基金代码，渠道必须由表格和附图明确相符。一个基金的附图不能证明其他基金或另一渠道；没有相应证据的channel省略，不得套用例子、常识或全表每日更新字样。全表明确单位放notes；有代码/渠道限定的说明必须保留其代码/渠道，不能写成全表单位。只返回JSON，不输出分析过程。`;
 
@@ -310,7 +311,7 @@ export async function extractDailyTable(
   // Reuse evidence-bound earlier transcriptions when cell-level unit evidence is not required;
   // revalidate against today's trusted directory and scope before admitting any vote.
   const legacyVersions = options.requireUnitContext ? [] : /撤回|作废|无法确认|未确定/.test(`${capture.title} ${capture.body}`)
-    ? ["nasdaq-daily-table-v4"] : ["nasdaq-daily-table-v4", "nasdaq-daily-table-v3"];
+    ? ["nasdaq-daily-table-v5", "nasdaq-daily-table-v4"] : ["nasdaq-daily-table-v5", "nasdaq-daily-table-v4", "nasdaq-daily-table-v3"];
   // Older keys did not bind the update timestamp used to resolve table dates. Only migrate
   // those entries when there is no update timestamp, otherwise obtain a fresh transcription.
   const keyFormats = capture.sourceUpdatedAt === null ? [true, false] : [true];

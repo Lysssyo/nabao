@@ -58,8 +58,9 @@ def check_common(value):
     assert backend_mounts["/app/push"]["source"] == "push-data"
     assert services["backend"]["environment"]["JAVA_TOOL_OPTIONS"].startswith("-Xms64m -Xmx192m")
     assert services["collector"]["environment"]["NODE_OPTIONS"] == "--max-old-space-size=256"
-    assert services["collector"]["shm_size"] == 256 * 1024 ** 2
-    assert sum(services[name]["mem_limit"] for name in ("mysql", "backend", "collector")) == 1600 * 1024 ** 2
+    # Compose releases serialize this byte count as either a JSON string or number.
+    assert int(services["collector"]["shm_size"]) == 256 * 1024 ** 2
+    assert sum(int(services[name]["mem_limit"]) for name in ("mysql", "backend", "collector")) == 1600 * 1024 ** 2
 
 
 core = config()
@@ -73,7 +74,7 @@ check_common(https)
 assert not https["services"]["backend"].get("ports")
 caddy = https["services"]["caddy"]
 assert {(port["target"], port["published"], port["protocol"]) for port in caddy["ports"]} == {(80, "80", "tcp"), (443, "443", "tcp")}
-assert caddy["mem_limit"] == 64 * 1024 ** 2
+assert int(caddy["mem_limit"]) == 64 * 1024 ** 2
 assert set(https["volumes"]) == BASE_VOLUMES | {"caddy-data", "caddy-config"}
 caddy_config = next(item for item in caddy["volumes"] if item["target"] == "/etc/caddy/Caddyfile")
 assert caddy_config["source"] == str(ROOT / "deploy/aliyun/Caddyfile") and caddy_config["read_only"]

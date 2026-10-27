@@ -98,7 +98,7 @@ export function useAdmin(api: AdminApi = createAdminApi()) {
   }
   async function perform(kind: CollectorAction) {
     if (!connected.value || action.value || authorAction.value || kind !== 'cancel' && kind !== 'complete' && collector.value?.busy
-        || kind === 'run' && (collector.value?.sources.length ?? 0) < 2) return;
+        || kind === 'run' && (collector.value?.sources.length ?? 0) < 1) return;
     const selected = generation; action.value = kind; actionError.value = ''; stopTimer();
     // Mutations never overlap with an in-flight status/preview read.
     await reading; if (selected !== generation) return;
@@ -156,15 +156,19 @@ export function useAdmin(api: AdminApi = createAdminApi()) {
       if (selected === generation) { authorAction.value = null; schedule(); }
     }
   }
+  const auditBatches = () => call(api.auditBatches);
+  const auditFunds = (id: string) => call((key, signal) => api.auditFunds(id, key, signal));
+  const auditEntries = (id: string, authorId: string, field: string, page: number, fundCode = '') =>
+    call((key, signal) => api.auditEntries(id, authorId, field, page, key, signal, fundCode));
   const addAuthor = (input: AuthorInput) => changeAuthor('add', input);
   const removeAuthor = (id: string) => changeAuthor('remove', id);
   const busy = computed(() => loading.value || action.value !== null || authorAction.value !== null || collector.value?.busy === true);
   const canRun = computed(() => connected.value && Boolean(collector.value?.available) && !busy.value && !activeLogin(collector.value)
-    && (collector.value?.sources.length ?? 0) >= 2
+    && (collector.value?.sources.length ?? 0) >= 1
     && !['expired', 'restricted', 'failed', 'checking'].includes(collector.value?.session.status ?? ''));
   const onPageHide = () => disconnect();
   window.addEventListener('pagehide', onPageHide);
   onBeforeUnmount(() => { disconnect(); window.removeEventListener('pagehide', onPageHide); });
   return { connected, loading, action, dashboard, collector, message, collectorError, actionError, previewUrl, previewError,
-    busy, canRun, connect, disconnect, refresh, perform, authorAction, authorError, authorSaved, addAuthor, removeAuthor };
+    busy, canRun, connect, disconnect, refresh, perform, authorAction, authorError, authorSaved, addAuthor, removeAuthor, auditBatches, auditEntries, auditFunds };
 }

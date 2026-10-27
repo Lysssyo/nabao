@@ -89,3 +89,26 @@ INSERT INTO quota_source (author_id, name, profile_url, enabled)
 SELECT '64ea885c0000000001004087', '纳宝',
        'https://www.xiaohongshu.com/user/profile/64ea885c0000000001004087', TRUE
 WHERE NOT EXISTS (SELECT 1 FROM quota_source WHERE author_id = '64ea885c0000000001004087');
+
+CREATE TABLE IF NOT EXISTS vote_audit_batch (
+    batch_id CHAR(36) PRIMARY KEY,
+    data_date DATE NOT NULL,
+    recorded_at TIMESTAMP(6) NOT NULL,
+    rule_name VARCHAR(100) NOT NULL,
+    revision CHAR(64) NOT NULL,
+    publication_status VARCHAR(30) NOT NULL,
+    sources_json TEXT NOT NULL,
+    entry_count INT NOT NULL,
+    payload_hash CHAR(64) NOT NULL,
+    INDEX idx_vote_audit_recorded (recorded_at)
+);
+CREATE TABLE IF NOT EXISTS vote_audit_entry (
+    batch_id CHAR(36) NOT NULL,
+    entry_index INT NOT NULL,
+    author_id CHAR(24) NOT NULL,
+    field_name VARCHAR(30) NOT NULL,
+    entry_json MEDIUMTEXT NOT NULL,
+    PRIMARY KEY (batch_id, entry_index),
+    CONSTRAINT fk_vote_audit_batch FOREIGN KEY (batch_id) REFERENCES vote_audit_batch(batch_id),
+    INDEX idx_vote_audit_author (batch_id, author_id, field_name)
+);

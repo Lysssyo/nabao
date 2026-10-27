@@ -22,7 +22,7 @@ function input(author: number, patch: Partial<DailyTableRow> = {}, options: { da
 }
 const row = (result: ReturnType<typeof voteDailyTables>) => result.table?.rows.find((row) => row.fundCode === "019441");
 
-test("five authors vote each field independently; unique plurality needs two authors, not 3/5", () => {
+test("five authors vote each field independently; a unique two-vote plurality defeats isolated votes", () => {
   const result = voteDailyTables([input(0, { distributorLimit: "5", directLimit: "50" }), input(1, { distributorLimit: "5" }),
     input(2), input(3, { distributorLimit: "20" }), input(4, { distributorLimit: "30", directLimit: "50" })], "2026-10-21", ids);
   assert.equal(row(result)!.distributorLimit, "5");
@@ -34,16 +34,18 @@ test("five authors vote each field independently; unique plurality needs two aut
   assert.deepEqual(Object.keys(result.table!), ["schemaVersion", "dataDate", "updatedAt", "source", "rows", "notes"]);
 });
 
-test("2-2 ties and single-source fields stay pending and absent metrics stay null", () => {
+test("2-2 ties stay pending while single-source fields are adopted", () => {
   const result = voteDailyTables([input(0, { distributorLimit: "5", feeRate: null }), input(1, { distributorLimit: "5", feeRate: null }),
     input(2), input(3, { feeRate: null }), input(4, { distributorLimit: "未明确", feeRate: null })], "2026-10-21", ids);
   assert.equal(row(result)!.distributorLimit, "待更新");
-  assert.equal(row(result)!.feeRate, null);
+  assert.equal(row(result)!.feeRate, "0.65%");
   assert.equal(result.decisions.find((item) => item.fundCode === "019441" && item.field === "distributorLimit")!.status, "TIE");
 });
 
 test("old days and unconfigured authors never top up today's votes; all unknown has no public table", () => {
-  assert.equal(voteDailyTables([input(0), input(1, {}, { day: "2026-10-20" }), input(4)], "2026-10-21", ids.slice(0, 4)).table, null);
+  const single = voteDailyTables([input(0), input(1, {}, { day: "2026-10-20" }), input(4)], "2026-10-21", ids.slice(0, 4));
+  assert.equal(row(single)!.distributorLimit, "10");
+  assert.equal(single.decisions.find(item => item.fundCode === "019441" && item.field === "distributorLimit")!.votes.length, 1);
   const unknown = { feeRate: null, distributorLimit: "未明确", directLimit: "待更新", return1y: null, trackingError: null };
   assert.equal(voteDailyTables([input(0, unknown), input(1, unknown)], "2026-10-21", ids).table, null);
 });
@@ -55,7 +57,7 @@ test("repeated dash placeholders and explicit unknown labels never form votes, w
     assert.equal(result.decisions.find((item) => item.fundCode === "019441" && item.field === "distributorLimit")!.votes.length, 0);
   }
   for (const value of ["无", "无代销", "暂停", "0"]) {
-    assert.equal(row(voteDailyTables([input(0, { distributorLimit: value }), input(1, { distributorLimit: value })], "2026-10-21", ids))!.distributorLimit, value);
+    assert.equal(row(voteDailyTables([input(0, { distributorLimit: value }), input(1, { distributorLimit: value })], "2026-10-21", ids))!.distributorLimit, value === "暂停" ? "暂停申购" : value);
   }
 });
 
@@ -75,14 +77,19 @@ test("explicit withdrawal suppresses that author's earlier field; deleted rows i
   const result = voteDailyTables([older, withdrawal, input(1, { distributorLimit: "5" }), input(2)], "2026-10-21", ids);
   assert.equal(row(result)!.distributorLimit, "待更新");
   const deleted = input(0); deleted.capture.sourceUpdatedAt = "2026-10-21T03:00:00Z"; deleted.table.rows = [];
-  assert.equal(voteDailyTables([input(0), deleted, input(1)], "2026-10-21", ids).table, null);
+  const remaining = voteDailyTables([input(0), deleted, input(1)], "2026-10-21", ids);
+  assert.equal(row(remaining)!.distributorLimit, "10");
+  assert.equal(remaining.decisions.find(item => item.fundCode === "019441" && item.field === "distributorLimit")!.votes.length, 1);
 });
 
 test("plain amount with explicit daily units matches 元/日, but unknown period does not", () => {
   const two = [input(0, { distributorLimit: "10元/日" }), input(1)];
   assert.equal(row(voteDailyTables(two, "2026-10-21", ids))!.distributorLimit, "10");
   two[1]!.table.notes = [];
-  assert.equal(row(voteDailyTables(two, "2026-10-21", ids))!.distributorLimit, "待更新");
+  const result = voteDailyTables(two, "2026-10-21", ids);
+  assert.equal(row(result)!.distributorLimit, "10");
+  assert.equal(result.decisions.find(d => d.fundCode === "019441" && d.field === "distributorLimit")!.votes.length, 1);
+  assert.equal(row(voteDailyTables([two[1]!], "2026-10-21", ids))!.distributorLimit, "待更新");
 });
 
 test("unchanged wording describes a transition, while footnotes and channel conditions still qualify values", () => {
@@ -105,16 +112,16 @@ test("qualifiers, merged limits, no distributor, pause, and zero are different v
   assert.ok(result.table!.notes.some((note) => note.includes("019441 代销") && note.includes("合并限额")));
 });
 
-test("performance metrics compare reported-day values separately from explicit and differing as-of dates", () => {
+test("explicitly different cutoffs remain separate; missing return cutoffs abstain instead of opposing dated returns", () => {
   const a = input(0);
   const b = input(1, {}, { notes: ["额度：元/日", "收益截至2026-10-19", "跟踪误差截至2026-10-20"] });
   assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.return1y, null);
   assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.trackingError, "2.1%");
   b.table.notes = [];
-  assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.return1y, null);
+  assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.return1y, "15%");
   assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.trackingError, null);
   a.table.notes = b.table.notes = [];
-  assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.return1y, "15%");
+  assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.return1y, null);
   assert.equal(row(voteDailyTables([a, b], "2026-10-21", ids))!.trackingError, "2.1%");
 });
 
@@ -136,15 +143,17 @@ test("unit evidence affects exactly one fund and channel; scoped notes do not be
   b.table.rows.push({ ...b.table.rows[0]!, fundCode: "021000", fundName: "南方纳斯达克100指数I" });
   let result = voteDailyTables([a, b], "2026-10-21", ids);
   assert.equal(row(result)!.directLimit, "100");
-  assert.equal(row(result)!.distributorLimit, "待更新");
-  assert.equal(result.table!.rows.find((row) => row.fundCode === "021000")!.directLimit, "待更新");
+  assert.equal(row(result)!.distributorLimit, "10");
+  assert.equal(result.table!.rows.find((row) => row.fundCode === "021000")!.directLimit, "100");
+  assert.equal(result.decisions.find(d => d.fundCode === "021000" && d.field === "directLimit")!.votes.length, 1);
   assert.ok(result.decisions.find((decision) => decision.fundCode === "019441" && decision.field === "directLimit")!.votes.some((vote) => vote.unitContext?.imageSha256 === "a".repeat(64)));
   a.unitContexts = {};
   a.table.notes = ["019441直销额度单位：元/日"];
   result = voteDailyTables([a, b], "2026-10-21", ids);
   assert.equal(row(result)!.directLimit, "100");
-  assert.equal(row(result)!.distributorLimit, "待更新");
-  assert.equal(result.table!.rows.find((row) => row.fundCode === "021000")!.directLimit, "待更新");
+  assert.equal(row(result)!.distributorLimit, "10");
+  assert.equal(result.table!.rows.find((row) => row.fundCode === "021000")!.directLimit, "100");
+  assert.equal(result.decisions.find(d => d.fundCode === "021000" && d.field === "directLimit")!.votes.length, 1);
 });
 
 test("publication watermarks prevent same-day revision rollback and advance even without visible changes", async (t) => {
@@ -241,4 +250,38 @@ test("run persists same-day valid votes during transient source failure, but nev
   assert.equal(again.status, "restricted");
   const tomorrow = await dailyTableFromReport(reportFile, join(path, "public"), { dataDate: "2026-10-22", extract });
   assert.equal(tomorrow.status, "restricted"); assert.equal(tomorrow.publication, null); assert.equal(tomorrow.dataDate, "2026-10-21");
+});
+
+test("purchase pause synonyms merge while no distributor, large-order pauses and channel qualifiers remain distinct", () => {
+  for(const text of ["暂停","暂停申购","暂停购买","停止申购","停购"]) {
+    const result=voteDailyTables([input(0,{distributorLimit:text}),input(1,{distributorLimit:"暂停申购"})],"2026-10-21",ids);
+    assert.equal(row(result)!.distributorLimit,"暂停申购");
+    assert.equal(result.decisions.find(d=>d.fundCode==="019441"&&d.field==="distributorLimit")!.support,2);
+  }
+  for(const text of ["无代销","暂停大额申购","暂停赎回","部分渠道暂停申购"]) {
+    assert.equal(row(voteDailyTables([input(0,{distributorLimit:text}),input(1,{distributorLimit:"暂停申购"})],"2026-10-21",ids))!.distributorLimit,"待更新");
+  }
+});
+test("a global table update date cannot manufacture a return cutoff and incomplete units cannot manufacture opposing votes",()=>{
+  const undated=input(0,{return1y:"14%"},{notes:["数据截至2026年10月21日"]});
+  const dated=input(1,{return1y:"15%"});
+  const result=voteDailyTables([undated,dated],"2026-10-21",ids);
+  assert.equal(row(result)!.return1y,"15%");
+  for(const field of ["return1y","distributorLimit"] as const) {
+    const decision=result.decisions.find(d=>d.fundCode==="019441"&&d.field===field)!;
+    assert.equal(decision.votes.length,1);assert.equal(decision.votes[0]!.authorId,ids[1]);
+  }
+  undated.table.notes.push("收益截至2026-10-19");
+  assert.equal(row(voteDailyTables([undated,dated],"2026-10-21",ids))!.return1y,null);
+});
+
+test("product-page net-value dates qualify only the explicitly named fund, not the whole reporting table",()=>{
+  const a=input(0,{}, {notes:["数据截至2026年10月21日","019441 单位净值（10-20）","额度：元/日"]});
+  const b=input(1);
+  a.table.rows.push({...a.table.rows[0]!,fundCode:"021000",fundName:"南方纳斯达克100指数I"});
+  b.table.rows.push({...b.table.rows[0]!,fundCode:"021000",fundName:"南方纳斯达克100指数I"});
+  const result=voteDailyTables([a,b],"2026-10-21",ids);
+  const decision=(fundCode:string)=>result.decisions.find(d=>d.fundCode===fundCode&&d.field==="return1y")!;
+  assert.equal(decision("019441").support,2);assert.equal(decision("021000").votes.length,1);
+  assert.equal(decision("019441").value,"15%");
 });

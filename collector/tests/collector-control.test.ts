@@ -48,7 +48,7 @@ test("manual run starts once, rejects concurrent work and preserves no-new-post 
   } finally { finish(); await fixture.cleanup(); }
 });
 
-test("author CRUD persists across restart, allows an empty list and resumes scheduling only at two authors", async () => {
+test("author CRUD persists across restart, allows an empty list and resumes scheduling at one author", async () => {
   const fixture = await setup({ scheduleEnabled: true }, { run: async () => result() });
   let restored: CollectorControl | undefined;
   try {
@@ -61,8 +61,8 @@ test("author CRUD persists across restart, allows an empty list and resumes sche
     await assert.rejects(fixture.control.startRun(), (error: unknown) => error instanceof ControlError && error.status === 409);
     const first = { name: "作者一", profileUrl: "https://www.xiaohongshu.com/user/profile/aaaaaaaaaaaaaaaaaaaaaaaa?xsec_token=private" };
     await fixture.control.addAuthor(first);
-    assert.equal(fixture.control.status().schedule.enabled, false);
-    await assert.rejects(fixture.control.startRun(), (error: unknown) => error instanceof ControlError && error.status === 409);
+    assert.equal(fixture.control.status().schedule.enabled, true);
+    assert.ok(fixture.control.status().schedule.nextRunAt);
     await fixture.control.addAuthor({ name: "作者二", profileUrl: "https://www.xiaohongshu.com/user/profile/bbbbbbbbbbbbbbbbbbbbbbbb" });
     assert.equal(fixture.control.status().schedule.enabled, true); assert.ok(fixture.control.status().schedule.nextRunAt);
     const expected = fixture.control.status().sources;

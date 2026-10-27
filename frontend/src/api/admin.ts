@@ -40,6 +40,15 @@ export function createAdminApi(fetchImpl: typeof fetch = globalThis.fetch) {
     }, method === 'GET' ? 25_000 : 65_000);
   }
   return {
+    auditBatches: (key: string, signal: AbortSignal) => json('/internal/v1/vote-audits', key, signal),
+    auditFunds: (id: string, key: string, signal: AbortSignal) => json(`/internal/v1/vote-audits/${encodeURIComponent(id)}/funds`, key, signal),
+    auditEntries: (id: string, authorId: string, field: string, page: number, key: string, signal: AbortSignal, fundCode = '') => {
+      const query = new URLSearchParams({ page: String(page) });
+      if (authorId) query.set('authorId', authorId);
+      if (field) query.set('field', field);
+      if (fundCode) query.set('fundCode', fundCode);
+      return json(`/internal/v1/vote-audits/${encodeURIComponent(id)}?${query}`, key, signal);
+    },
     dashboard: (key: string, signal: AbortSignal) => json('/internal/v1/table-status', key, signal),
     collector: (key: string, signal: AbortSignal) => json('/internal/v1/collector', key, signal),
     action: (action: CollectorAction, key: string, signal: AbortSignal) => {

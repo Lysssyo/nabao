@@ -75,3 +75,11 @@ HTTPS配置去掉后端宿主端口，只由Caddy开放80/443；Caddy自动申�
 回滚应用时恢复之前同批的backend/collector镜像引用，沿用同一项目名与现有卷，执行同一组 `up -d --no-build --wait`，再验收。若涉及数据库或文件格式变更，先确认向后兼容；不兼容时需要恢复配套备份，不能只回退镜像。既有旧版数据库迁移与APNs私钥挂载见 `docs/development.md`，默认APNs保持关闭。
 
 本目录仅提供配置；不包含自动云资源创建、DNS修改、证书已签发、服务器登录已完成或采集已通过的承诺。
+
+## 服务器已有 Nginx
+
+沿用宿主机 Nginx 时，使用 `compose.yml`、`compose.production.yml` 和 `compose.nginx.yml` 三个文件启动服务。后端只监听宿主机回环端口，由单独的 Nginx 虚拟主机转发；不启用 Caddy overlay，也不占用其他站点的80/443监听。`nginx.http.conf.template` 仅供首次 ACME 校验，其他请求返回404；取得证书后替换为 `nginx.https.conf.template`，HTTP自动跳转HTTPS。渲染模板时只替换 `NABAO_DOMAIN` 和 `BACKEND_PORT`，保留 Nginx 自身的 `$host` 等变量。先执行 `nginx -t`，通过后再平滑重载，并为 Certbot 续期配置 Nginx 重载钩子。
+
+此模式使用可移植的 `browser-session.json`，不复制 Mac 的原生 Chrome profile。导出会话只进入 collector 私有卷，权限0600；模型密钥和生产环境文件也须限制为0600。迁移后需要在服务器检查实际登录结果，原机器的登录有效不能证明云端可访问。
+
+小主机可使用已经在开发机或CI编译、验证的产物构建运行镜像：`backend.runtime.Dockerfile` 的构建目录包含 `app.jar`；`collector.runtime.Dockerfile` 的构建目录包含同一版本的 `package.json`、锁文件和 `dist/src`。发布包应记录这些文件的SHA256并在服务器核验，再按原步骤启动和验收。这两个Dockerfile只负责运行镜像，不替代源码测试或Vue构建一致性检查。首次下载镜像或Chromium可能需要较长时间；用于下载的临时代理不应成为已部署服务的运行依赖。

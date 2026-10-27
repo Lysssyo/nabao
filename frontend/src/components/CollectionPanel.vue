@@ -14,7 +14,7 @@ const emit = defineEmits<{ run: [] }>();
     <template v-if="status">
       <div class="collection-meta"><span class="state-pill" :class="{ running: status.run?.status === 'running', failed: ['failed', 'interrupted'].includes(status.run?.status ?? '') }">{{ runLabel(status.run) }}</span><span class="subtle">{{ scheduleLabel(status.schedule) }}</span></div>
       <p v-if="status.run?.message" class="run-message">{{ status.run.message }}</p>
-      <p v-if="status.sources.length < 2" class="notice">至少添加两位作者才能采集。请在下方“采集作者”中添加。</p>
+      <p v-if="status.sources.length < 1" class="notice">至少添加一位作者才能采集。请在下方“采集作者”中添加。</p>
       <dl class="timing"><div v-if="status.run"><dt>{{ status.run.status === 'running' ? '本轮开始' : '本轮完成' }}</dt><dd>{{ displayTime(status.run.finishedAt || status.run.startedAt) }}</dd></div><div v-if="status.schedule.enabled"><dt>下次检查</dt><dd>{{ status.schedule.nextRunAt ? displayTime(status.schedule.nextRunAt) : status.busy ? '当前任务结束后安排' : '等待服务安排' }}</dd></div></dl>
       <p v-if="activeLogin(status)" class="notice">当前登录未完成，采集暂停。请在下方“采集账号”完成登录并确认。</p>
       <p v-else-if="status.session.status === 'restricted'" class="notice">小红书访问受限，采集已暂停。请查看下方“采集账号”的说明。</p>

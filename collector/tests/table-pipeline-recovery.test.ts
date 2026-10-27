@@ -23,7 +23,7 @@ test("five-author table pipeline publishes, reuses evidence and recovers from a 
   const modelRequests: string[] = [];
   const requestErrors: unknown[] = [];
   const modelPayload = {
-    dataDateText: dataDate, dateContext: `${dataDate}纳指额度一览`, pageDates: [dataDate], notes: [],
+    dataDateText: dataDate, dateContext: `${dataDate}纳指额度一览`, pageDates: [dataDate], notes: [`收益截至${dataDate}`],
     rows: DAILY_FUND_CATALOG.map(({ code, name }) => ({
       fundCode: code, fundName: name, feeRate: "0.65%", trackingError: "1.44%", return1y: "15.19%",
       distributorLimit: "10元/日", directLimit: "100元/日", mergedLimit: null,
